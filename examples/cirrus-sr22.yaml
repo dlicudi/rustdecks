@@ -1,0 +1,230 @@
+# Cirrus SR22 (Laminar) — Loupedeck Live profile.
+# Ported from the cockpitdecks SR22 config, restricted to the rustdecks subset:
+# commands / page / set-dataref actions, and text + single live value draws
+# (scale/offset/format). Pager LEDs (b0-b7) navigate from any page.
+#
+# Known simplifications vs the cockpitdecks original (see README "Not included"):
+#  - switches show their 0/1 state as text, not lit/unlit color
+#  - PFI keys show one value each (the original stacks two)
+#  - the FCU knob set lives on the PFI page only (no shared includes yet)
+
+device: loupedeck-live
+brightness: 0.7
+sim:
+  host: auto
+  port: 8086
+
+home: index
+
+# --- reusable navigation, repeated per page until includes exist ---
+# (kept identical on every page so the round buttons always navigate)
+
+pages:
+  index:
+    keys:
+      0:
+        draw: { text: PFI }
+        press: { page: pfi }
+      1:
+        draw: { text: SWITCHES }
+        press: { page: switches_master }
+      2:
+        draw: { text: LIGHTS }
+        press: { page: switches_lights }
+      6:
+        draw: { text: RADIO }
+        press: { page: radio_com1 }
+      9:
+        draw: { text: XPDR }
+        press: { page: transponder }
+    leds:
+      b0: { color: orange, press: { page: index } }
+      b1: { color: green, press: { page: pfi } }
+      b2: { color: blue, press: { page: switches_master } }
+      b4: { color: yellow, press: { page: radio_com1 } }
+      b7: { color: orange, press: { page: transponder } }
+
+  pfi:
+    keys:
+      0:
+        draw: { text: SPD, value: sim/cockpit2/gauges/indicators/airspeed_kts_pilot, format: "{:.0}" }
+      1:
+        draw: { text: HDG, value: sim/cockpit2/gauges/indicators/compass_heading_deg_mag, format: "{:.0}" }
+      2:
+        draw: { text: ALT, value: sim/cockpit2/gauges/indicators/altitude_ft_pilot, format: "{:.0}" }
+      3:
+        draw: { text: VS, value: sim/cockpit2/gauges/indicators/vvi_fpm_pilot, format: "{:.0}" }
+      8:
+        draw: { text: RPM, value: "sim/cockpit2/engine/indicators/prop_speed_rpm[0]", format: "{:.0}" }
+    encoders:
+      e0:
+        draw: { text: THR, value: "sim/flightmodel/engine/ENGN_thro[0]", scale: 100.0, format: "{:.0}%" }
+        turn_cw: { command: sim/engines/throttle_up }
+        turn_ccw: { command: sim/engines/throttle_down }
+        press: { command: sim/engines/throttle_full }
+      e1:
+        draw: { text: HDG, value: sim/cockpit/autopilot/heading_mag, format: "{:.0}" }
+        turn_cw: { command: sim/autopilot/heading_up }
+        turn_ccw: { command: sim/autopilot/heading_down }
+        press: { command: sim/autopilot/heading_sync }
+      e2:
+        draw: { text: QNH, value: sim/cockpit/misc/barometer_setting, format: "{:.2}" }
+        turn_cw: { command: sim/instruments/barometer_up }
+        turn_ccw: { command: sim/instruments/barometer_down }
+        press: { command: sim/instruments/barometer_std }
+      e3:
+        draw: { text: ALT, value: sim/cockpit2/autopilot/altitude_dial_ft, format: "{:.0}" }
+        turn_cw: { command: sim/autopilot/altitude_up }
+        turn_ccw: { command: sim/autopilot/altitude_down }
+      e4:
+        draw: { text: VS, value: sim/cockpit/autopilot/vertical_velocity, format: "{:.0}" }
+        turn_cw: { command: sim/autopilot/vertical_speed_up }
+        turn_ccw: { command: sim/autopilot/vertical_speed_down }
+        press: { command: sim/autopilot/vertical_speed_sync }
+      e5:
+        draw: { text: MIX, value: "sim/flightmodel/engine/ENGN_mixt[0]", scale: 100.0, format: "{:.0}%" }
+        turn_cw: { command: sim/engines/mixture_up }
+        turn_ccw: { command: sim/engines/mixture_down }
+        press: { command: sim/engines/mixture_max }
+    leds:
+      b0: { color: orange, press: { page: index } }
+      b1: { color: green, press: { page: pfi } }
+      b2: { color: blue, press: { page: switches_master } }
+      b4: { color: yellow, press: { page: radio_com1 } }
+      b7: { color: orange, press: { page: transponder } }
+
+  switches_master:
+    keys:
+      0:
+        draw: { text: BAT 2, value: "sim/cockpit2/electrical/battery_on[1]", format: "{:.0}" }
+        press: { command: sim/electrical/battery_2_toggle }
+      1:
+        draw: { text: BAT 1, value: "sim/cockpit2/electrical/battery_on[0]", format: "{:.0}" }
+        press: { command: sim/electrical/battery_1_toggle }
+      2:
+        draw: { text: ALT 1, value: "sim/cockpit2/electrical/generator_on[0]", format: "{:.0}" }
+        press: { command: sim/electrical/generator_1_toggle }
+      3:
+        draw: { text: ALT 2, value: "sim/cockpit2/electrical/generator_on[1]", format: "{:.0}" }
+        press: { command: sim/electrical/generator_2_toggle }
+      4:
+        draw: { text: AVIONICS, value: sim/cockpit/electrical/avionics_on, format: "{:.0}" }
+        press: { command: sim/systems/avionics_toggle }
+      5:
+        draw: { text: "FLAPS UP" }
+        press: { command: sim/flight_controls/flaps_up }
+      7:
+        draw: { text: "FLAPS DN" }
+        press: { command: sim/flight_controls/flaps_down }
+      9:
+        draw: { text: "LIGHTS →" }
+        press: { page: switches_lights }
+    leds:
+      b0: { color: orange, press: { page: index } }
+      b1: { color: green, press: { page: pfi } }
+      b2: { color: blue, press: { page: switches_master } }
+      b4: { color: yellow, press: { page: radio_com1 } }
+      b7: { color: orange, press: { page: transponder } }
+
+  switches_lights:
+    keys:
+      0:
+        draw: { text: NAV }
+        press: { command: sim/lights/nav_lights_toggle }
+      1:
+        draw: { text: STROBE }
+        press: { command: sim/lights/strobe_lights_toggle }
+      2:
+        draw: { text: LAND }
+        press: { command: sim/lights/landing_01_light_tog }
+      3:
+        draw: { text: ICE }
+        press: { command: sim/lights/generic_13_light_tog }
+      4:
+        draw: { text: DOME }
+        press: { command: sim/lights/generic_05_light_tog }
+      5:
+        draw: { text: FLOOD }
+        press: { command: sim/lights/generic_07_light_tog }
+      8:
+        draw: { text: "← MASTER" }
+        press: { page: switches_master }
+    leds:
+      b0: { color: orange, press: { page: index } }
+      b1: { color: green, press: { page: pfi } }
+      b2: { color: blue, press: { page: switches_master } }
+      b4: { color: yellow, press: { page: radio_com1 } }
+      b7: { color: orange, press: { page: transponder } }
+
+  radio_com1:
+    keys:
+      0:
+        draw: { text: STBY, value: sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833, scale: 0.001, format: "{:.3}" }
+        press: { command: sim/GPS/g1000n1_com_ff }
+      1:
+        draw: { text: "<>  SWAP" }
+        press: { command: sim/GPS/g1000n1_com_ff }
+      2:
+        draw: { text: ACTIVE, value: sim/cockpit2/radios/actuators/com1_frequency_hz_833, scale: 0.001, format: "{:.3}" }
+    encoders:
+      e0:
+        draw: { text: COARSE }
+        turn_cw: { command: sim/radios/stby_com1_coarse_up }
+        turn_ccw: { command: sim/radios/stby_com1_coarse_down }
+        press: { command: sim/GPS/g1000n1_com_ff }
+      e1:
+        draw: { text: FINE }
+        turn_cw: { command: sim/radios/stby_com1_fine_up }
+        turn_ccw: { command: sim/radios/stby_com1_fine_down }
+        press: { command: sim/GPS/g1000n1_com_ff }
+    leds:
+      b0: { color: orange, press: { page: index } }
+      b1: { color: green, press: { page: pfi } }
+      b2: { color: blue, press: { page: switches_master } }
+      b4: { color: yellow, press: { page: radio_com1 } }
+      b7: { color: orange, press: { page: transponder } }
+
+  transponder:
+    keys:
+      0:
+        draw: { text: SQUAWK, value: sim/cockpit/radios/transponder_code, format: "{:.0}" }
+        press: { command: sim/transponder/transponder_thousands_up }
+      1:
+        draw: { text: "+100" }
+        press: { command: sim/transponder/transponder_hundreds_up }
+      2:
+        draw: { text: "+10" }
+        press: { command: sim/transponder/transponder_tens_up }
+      3:
+        draw: { text: "+1" }
+        press: { command: sim/transponder/transponder_ones_up }
+      4:
+        draw: { text: ON }
+        press: { command: sim/transponder/transponder_on }
+      5:
+        draw: { text: OFF }
+        press: { command: sim/transponder/transponder_off }
+      6:
+        draw: { text: STBY }
+        press: { command: sim/transponder/transponder_standby }
+      7:
+        draw: { text: ALT }
+        press: { command: sim/transponder/transponder_alt }
+      8:
+        draw: { text: IDENT }
+        press: { command: sim/transponder/transponder_ident }
+    encoders:
+      e0:
+        draw: { text: "12" }
+        turn_cw: { command: sim/transponder/transponder_12_up }
+        turn_ccw: { command: sim/transponder/transponder_12_down }
+      e3:
+        draw: { text: "34" }
+        turn_cw: { command: sim/transponder/transponder_34_up }
+        turn_ccw: { command: sim/transponder/transponder_34_down }
+    leds:
+      b0: { color: orange, press: { page: index } }
+      b1: { color: green, press: { page: pfi } }
+      b2: { color: blue, press: { page: switches_master } }
+      b4: { color: yellow, press: { page: radio_com1 } }
+      b7: { color: orange, press: { page: transponder } }

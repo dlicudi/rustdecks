@@ -35,6 +35,9 @@ fn main() -> ExitCode {
     if arg == "simprobe" {
         return simprobe(std::env::args().nth(2));
     }
+    if arg == "check" {
+        return check(std::env::args().nth(2));
+    }
     let path = arg;
 
     let yaml = match std::fs::read_to_string(&path) {
@@ -56,6 +59,31 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Parse and validate a profile without touching hardware or the sim.
+fn check(path: Option<String>) -> ExitCode {
+    let Some(path) = path else {
+        eprintln!("usage: rustdecks check <profile.yaml>");
+        return ExitCode::FAILURE;
+    };
+    let yaml = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cannot read {path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match Profile::parse(&yaml) {
+        Ok(p) => {
+            println!("ok: {} pages, home `{}`", p.pages.len(), p.home);
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("{path}: {e}");
             ExitCode::FAILURE
         }
     }
