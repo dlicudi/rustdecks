@@ -17,7 +17,6 @@ use tungstenite::Message;
 
 const BEACON_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 1, 1);
 const BEACON_PORT: u16 = 49707;
-const WEB_API_PORT: u16 = 8086;
 const WS_READ_TIMEOUT: Duration = Duration::from_millis(50);
 
 /// Where X-Plane was found.
@@ -98,13 +97,13 @@ pub struct Sim {
 impl Sim {
     /// Connect to the Web API at `host`, pick the API version, and spawn the
     /// WebSocket thread. Returns the handle and the stream of value updates.
-    pub fn connect(host: &str) -> Result<(Sim, Receiver<Update>), String> {
+    pub fn connect(host: &str, port: u16) -> Result<(Sim, Receiver<Update>), String> {
         let agent = ureq::builder()
             .timeout(Duration::from_secs(5))
             .build();
-        let version = detect_version(&agent, host);
-        let rest_base = format!("http://{host}:{WEB_API_PORT}/api/{version}");
-        let ws_url = format!("ws://{host}:{WEB_API_PORT}/api/{version}");
+        let version = detect_version(&agent, host, port);
+        let rest_base = format!("http://{host}:{port}/api/{version}");
+        let ws_url = format!("ws://{host}:{port}/api/{version}");
 
         let (mut socket, _) =
             tungstenite::connect(&ws_url).map_err(|e| format!("ws connect {ws_url}: {e}"))?;
@@ -192,8 +191,8 @@ impl Sim {
 }
 
 /// Ask `/api/capabilities` for the newest supported API version (falls back to v2).
-fn detect_version(agent: &ureq::Agent, host: &str) -> String {
-    let url = format!("http://{host}:{WEB_API_PORT}/api/capabilities");
+fn detect_version(agent: &ureq::Agent, host: &str, port: u16) -> String {
+    let url = format!("http://{host}:{port}/api/capabilities");
     let fallback = "v2".to_string();
     let Ok(resp) = agent.get(&url).call() else {
         return fallback;

@@ -7,6 +7,7 @@
 //!   render     key/side-strip image composition
 //!   app        wiring: events -> actions, dataref updates -> redraws
 
+mod app;
 mod config;
 mod device;
 mod render;
@@ -44,19 +45,17 @@ fn main() -> ExitCode {
         }
     };
 
-    match Profile::parse(&yaml) {
-        Ok(p) => {
-            println!(
-                "ok: {} pages, home `{}`, sim {}:{}",
-                p.pages.len(),
-                p.home,
-                p.sim.host,
-                p.sim.port
-            );
-            ExitCode::SUCCESS
-        }
+    let profile = match Profile::parse(&yaml) {
+        Ok(p) => p,
         Err(e) => {
             eprintln!("{path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match app::run(profile) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
             ExitCode::FAILURE
         }
     }
@@ -146,7 +145,7 @@ fn simprobe(dataref: Option<String>) -> ExitCode {
         }
     };
 
-    let (sim, updates) = match sim::Sim::connect(&host) {
+    let (sim, updates) = match sim::Sim::connect(&host, 8086) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("connect failed: {e}");

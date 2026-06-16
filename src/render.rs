@@ -140,9 +140,48 @@ impl Canvas {
     }
 }
 
+/// Parse `#rgb`, `#rrggbb`, or a small set of named colors.
+pub fn parse_color(s: &str) -> Option<[u8; 3]> {
+    let s = s.trim();
+    if let Some(hex) = s.strip_prefix('#') {
+        return match hex.len() {
+            6 => Some([hex2(hex, 0)?, hex2(hex, 2)?, hex2(hex, 4)?]),
+            3 => {
+                let d = |i| u8::from_str_radix(&hex[i..i + 1], 16).ok().map(|v| v * 17);
+                Some([d(0)?, d(1)?, d(2)?])
+            }
+            _ => None,
+        };
+    }
+    Some(match s.to_ascii_lowercase().as_str() {
+        "black" => [0, 0, 0],
+        "white" => [255, 255, 255],
+        "red" => [220, 40, 40],
+        "green" => [40, 200, 60],
+        "blue" => [40, 90, 220],
+        "yellow" => [230, 210, 40],
+        "orange" => [240, 150, 30],
+        "cyan" => [40, 200, 220],
+        "gray" | "grey" => [128, 128, 128],
+        _ => return None,
+    })
+}
+
+fn hex2(hex: &str, i: usize) -> Option<u8> {
+    u8::from_str_radix(&hex[i..i + 2], 16).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn color_parsing() {
+        assert_eq!(parse_color("#00ff00"), Some([0, 255, 0]));
+        assert_eq!(parse_color("#0f0"), Some([0, 255, 0]));
+        assert_eq!(parse_color("red"), Some([220, 40, 40]));
+        assert_eq!(parse_color("nonsense"), None);
+    }
 
     #[test]
     fn key_buffer_has_correct_size() {

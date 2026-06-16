@@ -24,7 +24,6 @@ const DISPLAY_ID: [u8; 2] = [0x00, 0x4D]; // "\x00M"
 // Outbound action headers.
 const SET_BRIGHTNESS: u16 = 0x0409;
 const SET_COLOR: u16 = 0x0702;
-const SET_VIBRATION: u16 = 0x041B;
 const WRITE_FRAMEBUFF: u16 = 0xFF10;
 const DRAW: u16 = 0x050F;
 
@@ -112,11 +111,6 @@ impl LoupedeckLive {
             return Err(io::Error::new(ErrorKind::InvalidInput, "led index 0..=7"));
         };
         self.do_action(SET_COLOR, &[key, rgb[0], rgb[1], rgb[2]])
-    }
-
-    /// Haptic feedback. `pattern` is a raw firmware code (e.g. 0x01 = SHORT).
-    pub fn vibrate(&mut self, pattern: u8) -> io::Result<()> {
-        self.do_action(SET_VIBRATION, &[pattern])
     }
 
     /// Draw a 90x90 RGB565-LE buffer to center key 0..=11.

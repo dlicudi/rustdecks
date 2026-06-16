@@ -17,9 +17,6 @@ use serde::Deserialize;
 pub struct Profile {
     #[serde(default)]
     pub device: Device,
-    /// Optional serial number to pin a specific unit; auto-detect when absent.
-    #[serde(default)]
-    pub serial: Option<String>,
     /// Screen/LED brightness, 0.0..=1.0.
     #[serde(default = "default_brightness")]
     pub brightness: f32,
@@ -98,13 +95,11 @@ pub struct Draw {
     pub offset: Option<f64>,
     pub text_color: Option<String>,
     pub bg_color: Option<String>,
-    /// Path to a PNG icon, relative to the profile file.
-    pub icon: Option<String>,
 }
 
 /// What an input does. Untagged: the present field selects the variant, so the
 /// YAML reads naturally (`press: { command: ... }`, `press: { page: ... }`).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged, deny_unknown_fields)]
 pub enum Action {
     Command {
