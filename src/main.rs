@@ -10,6 +10,7 @@
 mod config;
 mod device;
 mod render;
+mod sim;
 
 use std::process::ExitCode;
 use std::sync::mpsc;
@@ -29,6 +30,9 @@ fn main() -> ExitCode {
 
     if arg == "probe" {
         return probe();
+    }
+    if arg == "simprobe" {
+        return simprobe(std::env::args().nth(2));
     }
     let path = arg;
 
@@ -119,5 +123,61 @@ fn probe() -> ExitCode {
         }
     }
     println!("probe done");
+    ExitCode::SUCCESS
+}
+
+/// X-Plane smoke test: discover (or use 127.0.0.1), subscribe to a dataref, and
+/// print live values for 10s.
+fn simprobe(dataref: Option<String>) -> ExitCode {
+    let dataref = dataref
+        .unwrap_or_else(|| "sim/flightmodel/position/indicated_airspeed".to_string());
+
+    let host = match sim::discover(Duration::from_secs(5)) {
+        Some(addr) => {
+            println!(
+                "beacon: X-Plane {} at {}",
+                addr.xplane_version, addr.host
+            );
+            addr.host
+        }
+        None => {
+            println!("no beacon; trying 127.0.0.1");
+            "127.0.0.1".to_string()
+        }
+    };
+
+    let (sim, updates) = match sim::Sim::connect(&host) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("connect failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("connected to Web API");
+
+    let (name, index) = sim::split_ref(&dataref);
+    let meta = match sim.dataref(name) {
+        Some(m) => m,
+        None => {
+            eprintln!("dataref not found: {name}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("resolved {name} -> id {} (writable: {})", meta.id, meta.writable);
+    sim.subscribe(&[meta.id]);
+    println!("subscribed; printing {dataref} for 10s...");
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        match updates.recv_timeout(Duration::from_millis(200)) {
+            Ok(up) if up.id == meta.id => {
+                println!("  {dataref} = {:?}", up.value.scalar(index));
+            }
+            Ok(_) => {}
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    println!("simprobe done");
     ExitCode::SUCCESS
 }
