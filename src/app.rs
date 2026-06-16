@@ -10,7 +10,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::Duration;
 
-use crate::config::{Action, Device, Draw, Profile};
+use crate::config::{Action, Device, Draw, Encoder, Led, Profile};
 use crate::device::{Event, LoupedeckLive};
 use crate::render::{self, Renderer, Style};
 use crate::sim::{self, DataValue, Sim, Update};
@@ -74,6 +74,8 @@ pub fn run(profile: Profile) -> Result<(), String> {
         cmd_ids: HashMap::new(),
         current_page: String::new(),
         pending_page: None,
+        eff_encoders: HashMap::new(),
+        eff_leds: HashMap::new(),
         key_pressed: [false; 12],
         enc_pressed: [false; 6],
         btn_pressed: [false; 8],
@@ -131,6 +133,9 @@ struct App {
     cmd_ids: HashMap<String, Option<i64>>,
     current_page: String,
     pending_page: Option<String>,
+    /// Current page's encoders/leds, profile defaults merged with page overrides.
+    eff_encoders: HashMap<String, Encoder>,
+    eff_leds: HashMap<String, Led>,
     key_pressed: [bool; 12],
     enc_pressed: [bool; 6],
     btn_pressed: [bool; 8],
@@ -197,14 +202,14 @@ impl App {
         self.page().keys.get(&index)?.press.clone()
     }
     fn encoder_turn_action(&self, index: u8, cw: bool) -> Option<Action> {
-        let e = self.page().encoders.get(&format!("e{index}"))?;
+        let e = self.eff_encoders.get(&format!("e{index}"))?;
         if cw { e.turn_cw.clone() } else { e.turn_ccw.clone() }
     }
     fn encoder_press_action(&self, index: u8) -> Option<Action> {
-        self.page().encoders.get(&format!("e{index}"))?.press.clone()
+        self.eff_encoders.get(&format!("e{index}"))?.press.clone()
     }
     fn led_action(&self, index: u8) -> Option<Action> {
-        self.page().leds.get(&format!("b{index}"))?.press.clone()
+        self.eff_leds.get(&format!("b{index}"))?.press.clone()
     }
 
     fn execute(&mut self, action: Action) {
@@ -234,6 +239,11 @@ impl App {
         self.current_page = name.to_string();
         self.last.clear();
 
+        // Merge inherited defaults with this page's encoders/leds (page wins per id).
+        let page = &self.profile.pages[name];
+        self.eff_encoders = merge(&self.profile.encoders, &page.encoders);
+        self.eff_leds = merge(&self.profile.leds, &page.leds);
+
         // Resolve and subscribe every dataref the page displays.
         let refs = self.page_value_refs();
         let mut ids = Vec::new();
@@ -249,7 +259,7 @@ impl App {
 
         // Static LED colors.
         for b in 0..8u8 {
-            if let Some(led) = self.page().leds.get(&format!("b{b}")) {
+            if let Some(led) = self.eff_leds.get(&format!("b{b}")) {
                 if let Some(rgb) = led.color.as_deref().and_then(render::parse_color) {
                     let _ = self.device.set_button_color(b, rgb);
                 }
@@ -276,13 +286,44 @@ impl App {
     fn render_key(&mut self, index: u8) {
         let draw = self.page().keys.get(&index).and_then(|k| k.draw.as_ref());
         let Some(draw) = draw else { return };
+
+        // Icon: an icon glyph (optionally with a label) — for nav/menu keys.
+        if let Some(glyph) = draw.icon.as_deref().and_then(render::icon_glyph) {
+            let label = draw.text.clone();
+            let content = format!("I\u{0}{glyph}\u{0}{}", label.as_deref().unwrap_or(""));
+            if self.last.get(&Surface::Key(index)) == Some(&content) {
+                return;
+            }
+            let style = style_for(draw);
+            let buf = self.renderer.icon_key(glyph, label.as_deref(), &style);
+            if self.device.draw_key(index, &buf).is_ok() {
+                self.last.insert(Surface::Key(index), content);
+            }
+            return;
+        }
+
+        // Annunciator: lit_color present -> on/off rendering driven by the value.
+        if let Some(lit_color) = draw.lit_color.as_deref().and_then(render::parse_color) {
+            let lit = self.value_number(draw).map(|v| v >= 0.5).unwrap_or(false);
+            let label = draw.text.clone().unwrap_or_default();
+            let content = format!("A\u{0}{lit}\u{0}{label}");
+            if self.last.get(&Surface::Key(index)) == Some(&content) {
+                return;
+            }
+            let buf = self.renderer.annunciator(&label, lit, lit_color, &Style::default());
+            if self.device.draw_key(index, &buf).is_ok() {
+                self.last.insert(Surface::Key(index), content);
+            }
+            return;
+        }
+
         let label = draw.text.clone();
         let value = self.value_text(draw);
+        let style = style_for(draw);
         let content = format!("{}\u{0}{}", label.as_deref().unwrap_or(""), value.as_deref().unwrap_or(""));
         if self.last.get(&Surface::Key(index)) == Some(&content) {
             return;
         }
-        let style = style_for(draw);
         let buf = self.renderer.key(label.as_deref(), value.as_deref(), &style);
         if self.device.draw_key(index, &buf).is_ok() {
             self.last.insert(Surface::Key(index), content);
@@ -308,24 +349,24 @@ impl App {
     }
 
     fn enc_cell(&self, index: u8) -> Option<(String, String)> {
-        let draw = self
-            .page()
-            .encoders
-            .get(&format!("e{index}"))?
-            .draw
-            .as_ref()?;
+        let draw = self.eff_encoders.get(&format!("e{index}"))?.draw.as_ref()?;
         let label = draw.text.clone().unwrap_or_default();
         let value = self.value_text(draw).unwrap_or_default();
         Some((label, value))
     }
 
-    /// The formatted display string for a draw's `value` dataref, if data exists.
-    fn value_text(&self, draw: &Draw) -> Option<String> {
+    /// The raw `value` dataref reading, scaled and offset, if data exists.
+    fn value_number(&self, draw: &Draw) -> Option<f64> {
         let vref = draw.value.as_ref()?;
         let (name, index) = sim::split_ref(vref);
         let id = (*self.dr_ids.get(name)?)?;
         let raw = self.values.get(&id)?.scalar(index)?;
-        let v = raw * draw.scale.unwrap_or(1.0) + draw.offset.unwrap_or(0.0);
+        Some(raw * draw.scale.unwrap_or(1.0) + draw.offset.unwrap_or(0.0))
+    }
+
+    /// The formatted display string for a draw's `value`, if data exists.
+    fn value_text(&self, draw: &Draw) -> Option<String> {
+        let v = self.value_number(draw)?;
         Some(format_value(draw.format.as_deref().unwrap_or("{}"), v))
     }
 
@@ -337,9 +378,8 @@ impl App {
 
     /// Every dataref reference shown on the current page (keys + encoders).
     fn page_value_refs(&self) -> Vec<String> {
-        let page = self.page();
-        let keys = page.keys.values().filter_map(|k| k.draw.as_ref());
-        let encs = page.encoders.values().filter_map(|e| e.draw.as_ref());
+        let keys = self.page().keys.values().filter_map(|k| k.draw.as_ref());
+        let encs = self.eff_encoders.values().filter_map(|e| e.draw.as_ref());
         keys.chain(encs).filter_map(|d| d.value.clone()).collect()
     }
 
@@ -368,10 +408,23 @@ enum Input {
     Btn,
 }
 
+/// Merge inherited defaults with page overrides (page wins per id).
+fn merge<T: Clone>(
+    defaults: &std::collections::BTreeMap<String, T>,
+    page: &std::collections::BTreeMap<String, T>,
+) -> HashMap<String, T> {
+    let mut m: HashMap<String, T> = defaults.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    for (k, v) in page {
+        m.insert(k.clone(), v.clone());
+    }
+    m
+}
+
 fn style_for(draw: &Draw) -> Style {
     let mut s = Style::default();
     if let Some(rgb) = draw.text_color.as_deref().and_then(render::parse_color) {
-        s.text_color = rgb;
+        s.label_color = rgb;
+        s.value_color = rgb;
     }
     if let Some(rgb) = draw.bg_color.as_deref().and_then(render::parse_color) {
         s.bg_color = rgb;

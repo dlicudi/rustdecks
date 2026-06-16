@@ -84,6 +84,8 @@ pages:
 | `scale`, `offset` | `shown = value * scale + offset` (defaults 1, 0) |
 | `format` | format string applied to the number (default `"{}"`) |
 | `text_color`, `bg_color` | `#rrggbb`, `#rgb`, or a named color |
+| `lit_color` | makes the key an annunciator: fills bright when `value` ≥ 0.5, dim when off, label centered |
+| `icon` | FontAwesome glyph name (`engine`, `radio`, …) or hex codepoint; renders as an icon key |
 
 ### Actions
 
@@ -93,6 +95,12 @@ pages:
 
 Keys take `press` / `long_press`; encoders take `turn_cw` / `turn_ccw` / `press`;
 LEDs take `color` / `press`.
+
+### Shared defaults
+
+Top-level `encoders` and `leds` are inherited by every page (a page may override
+an individual id). This is how the SR22 profile puts the FCU knobs and the 8-button
+pager on every page without repetition.
 
 ### Formatting
 
@@ -116,9 +124,10 @@ displayed *text* actually changes.
 
 ## Not included (by design)
 
-Icons, serial pinning, command hold (begin/end), dataref-driven LED colors,
-side-strip touch, and any formula/expression engine. These were cut to stay
-lean; they can be added when a real profile needs them.
+Serial pinning, command hold (begin/end), dataref-driven LED colors, side-strip
+touch, multi-value keys, an equality test for annunciators (`light when value ==
+N`, needed for mode selectors), and any formula/expression engine. These were cut
+to stay lean; they can be added when a real profile needs them.
 
 ## Credits & license
 

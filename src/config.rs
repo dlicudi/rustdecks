@@ -22,6 +22,12 @@ pub struct Profile {
     pub brightness: f32,
     #[serde(default)]
     pub sim: Sim,
+    /// Encoders inherited by every page (a page may override per-id).
+    #[serde(default)]
+    pub encoders: BTreeMap<String, Encoder>,
+    /// LEDs inherited by every page (a page may override per-id).
+    #[serde(default)]
+    pub leds: BTreeMap<String, Led>,
     /// Name of the page shown at startup.
     pub home: String,
     pub pages: BTreeMap<String, Page>,
@@ -63,7 +69,7 @@ pub struct Key {
     pub long_press: Option<Action>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Encoder {
     /// Rendered into this encoder's side-strip cell.
@@ -73,7 +79,7 @@ pub struct Encoder {
     pub press: Option<Action>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Led {
     /// `#rrggbb` or a named color; may be driven by a dataref later.
@@ -83,7 +89,11 @@ pub struct Led {
 
 /// What a surface shows. A static `text` label and/or a live `value` (a
 /// dataref) transformed by `scale`/`offset` and rendered with `format`.
-#[derive(Debug, Deserialize)]
+///
+/// If `lit_color` is set, the surface renders as an annunciator: the value is
+/// treated as on/off state (>= 0.5 is on), the cell fills with `lit_color` when
+/// on and a dimmed shade when off, and the label is shown instead of a number.
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Draw {
     pub text: Option<String>,
@@ -95,6 +105,10 @@ pub struct Draw {
     pub offset: Option<f64>,
     pub text_color: Option<String>,
     pub bg_color: Option<String>,
+    /// Annunciator on-color; presence switches the surface to on/off rendering.
+    pub lit_color: Option<String>,
+    /// Icon glyph name (e.g. `engine`) or hex codepoint; renders as an icon key.
+    pub icon: Option<String>,
 }
 
 /// What an input does. Untagged: the present field selects the variant, so the
@@ -154,6 +168,14 @@ impl Profile {
         if !self.pages.contains_key(&self.home) {
             return Err(format!("home page `{}` is not defined", self.home));
         }
+
+        // Profile-level (inherited) defaults.
+        check_ids("<defaults>", "encoder", self.encoders.keys(), 'e', 5)?;
+        check_ids("<defaults>", "led", self.leds.keys(), 'b', 7)?;
+        for action in default_actions(&self.encoders, &self.leds) {
+            self.check_target("<defaults>", action)?;
+        }
+
         for (name, page) in &self.pages {
             for &idx in page.keys.keys() {
                 if idx > 11 {
@@ -162,20 +184,34 @@ impl Profile {
             }
             check_ids(name, "encoder", page.encoders.keys(), 'e', 5)?;
             check_ids(name, "led", page.leds.keys(), 'b', 7)?;
-
-            // Every `page` action must target a defined page.
             for action in page.actions() {
-                if let Action::Page { page: target } = action {
-                    if !self.pages.contains_key(target) {
-                        return Err(format!(
-                            "page `{name}`: action targets undefined page `{target}`"
-                        ));
-                    }
-                }
+                self.check_target(name, action)?;
             }
         }
         Ok(())
     }
+
+    /// A `page` action must target a defined page.
+    fn check_target(&self, ctx: &str, action: &Action) -> Result<(), String> {
+        if let Action::Page { page: target } = action {
+            if !self.pages.contains_key(target) {
+                return Err(format!("{ctx}: action targets undefined page `{target}`"));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Actions defined on inherited encoder/led defaults.
+fn default_actions<'a>(
+    encoders: &'a BTreeMap<String, Encoder>,
+    leds: &'a BTreeMap<String, Led>,
+) -> impl Iterator<Item = &'a Action> {
+    let encs = encoders
+        .values()
+        .flat_map(|e| [e.press.as_ref(), e.turn_cw.as_ref(), e.turn_ccw.as_ref()]);
+    let leds = leds.values().map(|l| l.press.as_ref());
+    encs.chain(leds).flatten()
 }
 
 /// Validate `eN` / `bN`-style ids against their max index.
