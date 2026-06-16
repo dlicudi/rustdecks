@@ -1,0 +1,19 @@
+[package]
+name = "rustdecks"
+version = "0.1.0"
+edition = "2021"
+description = "Lean Loupedeck Live controller for X-Plane 12"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_yaml_ng = "0.10"
+serialport = "4"
+fontdue = "0.9"
+
+# Added per-module as we implement them, to keep the dependency set honest:
+#   sim    : tungstenite, ureq
+
+[profile.release]
+opt-level = 3
+lto = true

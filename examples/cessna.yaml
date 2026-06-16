@@ -1,0 +1,70 @@
+# Example rustdecks profile — Cessna 172, Loupedeck Live.
+# Demonstrates the full vocabulary: keys, encoders with side-strip draw, LEDs,
+# and the three action kinds (command, page, set-dataref).
+
+device: loupedeck-live
+brightness: 0.7
+sim:
+  host: auto        # discover X-Plane via UDP beacon
+  port: 8086
+
+home: main
+
+pages:
+  main:
+    keys:
+      0:
+        draw:
+          text: GEN
+          value: sim/cockpit2/electrical/generator_on[0]
+          format: "{:.0}"
+        press: { command: sim/electrical/generator_1_toggle }
+      1:
+        draw:
+          text: BAT
+          value: sim/cockpit2/electrical/battery_on[0]
+          format: "{:.0}"
+        press: { command: sim/electrical/battery_1_toggle }
+      3:
+        draw: { text: "RADIO →" }
+        press: { page: radio }
+      8:
+        draw:
+          text: ALT
+          value: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+          format: "{:.0} ft"
+
+    encoders:
+      e0:
+        draw:
+          text: THR
+          value: sim/flightmodel/engine/ENGN_thro[0]
+          scale: 100.0
+          format: "{:.0}%"
+        turn_cw: { command: sim/engines/throttle_up }
+        turn_ccw: { command: sim/engines/throttle_down }
+        press: { command: sim/engines/throttle_full }
+      e3:
+        draw:
+          text: HDG
+          value: sim/cockpit/autopilot/heading_mag
+          format: "{:.0}"
+        turn_cw: { command: sim/autopilot/heading_up }
+        turn_ccw: { command: sim/autopilot/heading_down }
+
+    leds:
+      b0:
+        color: "#00ff00"
+        press: { set-dataref: sim/cockpit2/switches/landing_lights_on, value: 1.0 }
+
+  radio:
+    keys:
+      0:
+        draw: { text: "← BACK" }
+        press: { page: main }
+      4:
+        draw:
+          text: COM1
+          value: sim/cockpit2/radios/actuators/com1_frequency_hz_833
+          format: "{:.3}"
+        press: { command: sim/radios/com1_standy_flip }
