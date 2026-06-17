@@ -145,8 +145,10 @@ rustdecks stands entirely on the work of **Pierre M. ([devleaks](https://github.
   config. rustdecks is a deliberately lean reimplementation of a slice of cockpitdecks;
   for the full-featured, multi-deck, web-capable original, use cockpitdecks.
 
-Code is MIT (see [LICENSE](LICENSE)). Bundled fonts, each under the SIL Open Font
-License with its license alongside in [assets/fonts/](assets/fonts/):
+Code is MIT (see [LICENSE](LICENSE)); upstream MIT copyright notices for the
+ported protocol and SR22 profile are preserved in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Bundled fonts, each under the
+SIL Open Font License with its license alongside in [assets/fonts/](assets/fonts/):
 
 - [B612](https://github.com/polarsys/b612) — labels/values, designed for cockpit displays.
 - [Segment7](https://fontlibrary.org/en/font/segment7) by Cedric Knight — the 7-segment avionics readout face.
