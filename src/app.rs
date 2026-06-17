@@ -358,7 +358,19 @@ impl App {
 
     fn render_key(&mut self, index: u8) {
         let draw = self.page().keys.get(&index).and_then(|k| k.draw.as_ref());
-        let Some(draw) = draw else { return };
+        // No draw on this page: blank the key so leftovers from a prior page
+        // (e.g. the index menu's icons) don't linger after a page switch.
+        let Some(draw) = draw else {
+            let content = String::new();
+            if self.last.get(&Surface::Key(index)) == Some(&content) {
+                return;
+            }
+            let buf = self.renderer.key(None, None, &Style::default());
+            if self.dev_draw_key(index, &buf) {
+                self.last.insert(Surface::Key(index), content);
+            }
+            return;
+        };
 
         // Icon: an icon glyph (optionally with a label) — for nav/menu keys.
         if let Some(glyph) = draw.icon.as_deref().and_then(render::icon_glyph) {
