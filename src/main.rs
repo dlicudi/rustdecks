@@ -7,18 +7,13 @@
 //!   render     key/side-strip image composition
 //!   app        wiring: events -> actions, dataref updates -> redraws
 
-mod app;
-mod config;
-mod device;
-mod render;
-mod sim;
-
 use std::process::ExitCode;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use config::Profile;
-use device::LoupedeckLive;
+use rustdecks::config::Profile;
+use rustdecks::device::LoupedeckLive;
+use rustdecks::{app, render, sim};
 
 fn main() -> ExitCode {
     let arg = match std::env::args().nth(1) {

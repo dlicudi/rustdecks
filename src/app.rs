@@ -51,8 +51,19 @@ pub fn run(profile: Profile) -> Result<(), String> {
     } else {
         profile.sim.host.clone()
     };
-    let (sim, updates) = Sim::connect(&host, profile.sim.port)?;
-    println!("sim: Web API connected");
+    // The deck still renders (icons, labels, nav, LEDs) without the sim, so a
+    // failed connect is a warning, not a fatal error — live values just stay blank.
+    let (sim, updates) = match Sim::connect(&host, profile.sim.port) {
+        Ok((s, rx)) => {
+            println!("sim: Web API connected");
+            (Some(s), rx)
+        }
+        Err(e) => {
+            eprintln!("sim: not connected ({e}); running without live data");
+            let (_dead, rx) = mpsc::channel(); // never fires
+            (None, rx)
+        }
+    };
 
     let renderer = Renderer::new()?;
 
@@ -126,7 +137,7 @@ enum Surface {
 struct App {
     profile: Profile,
     device: LoupedeckLive,
-    sim: Sim,
+    sim: Option<Sim>,
     renderer: Renderer,
     values: HashMap<i64, DataValue>,
     dr_ids: HashMap<String, Option<i64>>,
@@ -216,13 +227,17 @@ impl App {
         match action {
             Action::Command { command } => {
                 if let Some(id) = self.command_id(&command) {
-                    self.sim.run_command(id);
+                    if let Some(s) = self.sim.as_ref() {
+                        s.run_command(id);
+                    }
                 }
             }
             Action::SetDataref { dataref, value } => {
                 let (name, _) = sim::split_ref(&dataref);
                 if let Some(id) = self.dataref_id(name) {
-                    self.sim.set_dataref(id, value);
+                    if let Some(s) = self.sim.as_ref() {
+                        s.set_dataref(id, value);
+                    }
                 }
             }
             Action::Page { page } => self.pending_page = Some(page),
@@ -255,7 +270,9 @@ impl App {
                 }
             }
         }
-        self.sim.subscribe(&ids);
+        if let Some(s) = self.sim.as_ref() {
+            s.subscribe(&ids);
+        }
 
         // Static LED colors.
         for b in 0..8u8 {
@@ -387,7 +404,8 @@ impl App {
         if let Some(cached) = self.dr_ids.get(name) {
             return *cached;
         }
-        let id = self.sim.dataref(name).map(|m| m.id);
+        let sim = self.sim.as_ref()?; // no sim -> unresolved, don't cache
+        let id = sim.dataref(name).map(|m| m.id);
         self.dr_ids.insert(name.to_string(), id);
         id
     }
@@ -396,7 +414,8 @@ impl App {
         if let Some(cached) = self.cmd_ids.get(name) {
             return *cached;
         }
-        let id = self.sim.command(name);
+        let sim = self.sim.as_ref()?;
+        let id = sim.command(name);
         self.cmd_ids.insert(name.to_string(), id);
         id
     }

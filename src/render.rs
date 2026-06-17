@@ -95,14 +95,17 @@ impl Renderer {
     }
 
     /// Render a 60x270 side strip from up to three (label, value) cells, stacked.
+    /// Cells are only 60px wide, so use smaller type than the 90px keys.
     pub fn side_strip(&self, cells: &[Option<(String, String)>; 3], style: &Style) -> Vec<u8> {
+        const STRIP_LABEL: f32 = 13.0;
+        const STRIP_VALUE: f32 = 14.0;
         let mut c = Canvas::new(SIDE_W as usize, SIDE_H as usize, style.bg_color);
         let cell_h = SIDE_H as i32 / 3; // 90
         for (i, cell) in cells.iter().enumerate() {
             let Some((label, value)) = cell else { continue };
             let base = i as i32 * cell_h;
-            self.line(&mut c, &self.label, label, style.label_size, style.label_color, base + 28);
-            self.line(&mut c, &self.value, value, style.value_size, style.value_color, base + 62);
+            self.line(&mut c, &self.label, label, STRIP_LABEL, style.label_color, base + 30);
+            self.line(&mut c, &self.value, value, STRIP_VALUE, style.value_color, base + 58);
         }
         c.to_rgb565_le()
     }
