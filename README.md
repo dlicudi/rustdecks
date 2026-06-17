@@ -5,6 +5,10 @@ in Rust. A deliberately small alternative to [cockpitdecks](https://github.com/d
 Loupedeck Live only, no web decks, no async runtime — ~1,900 lines and a handful
 of dependencies.
 
+![A rustdecks deck page: 7-segment flight readouts, LED annunciators, accent-barred icon keys, encoder side strips, and the round nav LEDs](docs/preview.png)
+
+*Rendered by the bundled renderer — `cargo run --example hero`.*
+
 ## Requirements
 
 - A Loupedeck Live (USB)
