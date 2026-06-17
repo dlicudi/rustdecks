@@ -672,6 +672,8 @@ fn style_for(draw: &Draw) -> Style {
     if let Some(rgb) = draw.bg_color.as_deref().and_then(render::parse_color) {
         s.bg_color = rgb;
     }
+    s.accent = draw.accent.as_deref().and_then(render::parse_color);
+    s.seven_seg = matches!(draw.font.as_deref(), Some("seven-seg" | "segment" | "7seg"));
     s
 }
 

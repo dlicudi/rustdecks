@@ -109,6 +109,11 @@ pub struct Draw {
     pub lit_color: Option<String>,
     /// Icon glyph name (e.g. `engine`) or hex codepoint; renders as an icon key.
     pub icon: Option<String>,
+    /// Accent bar color painted across the top of the key.
+    pub accent: Option<String>,
+    /// Value face: `seven-seg` for a 7-segment avionics readout, else the
+    /// default monospace.
+    pub font: Option<String>,
 }
 
 /// What an input does. Untagged: the present field selects the variant, so the

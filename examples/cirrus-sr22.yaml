@@ -69,34 +69,36 @@ leds:
 
 pages:
   # Home: an icon menu mirroring the cockpitdecks index page.
+  # Each icon carries a top accent bar colour-matched to the round nav button
+  # (b0..b7) that opens the same page, tying the screen icon to its LED.
   index:
     keys:
-      0:  { draw: { icon: pfi, text: PFI },           press: { page: pfi } }
-      1:  { draw: { icon: switches, text: SW },        press: { page: switches_master } }
-      2:  { draw: { icon: icing, text: ICE },          press: { page: switches_icing } }
-      3:  { draw: { icon: weather, text: WX },         press: { page: weather } }
-      4:  { draw: { icon: autopilot, text: AP },       press: { page: ap } }
-      5:  { draw: { icon: gcu, text: GCU },            press: { page: gcu479 } }
-      6:  { draw: { icon: radio, text: COM },          press: { page: radio_com1 } }
-      7:  { draw: { icon: engine, text: ENG },         press: { page: engine } }
-      8:  { draw: { icon: views, text: VIEW },         press: { page: views } }
-      9:  { draw: { icon: transponder, text: XPDR },   press: { page: transponder } }
-      10: { draw: { icon: fms, text: FMS },            press: { page: fms } }
+      0:  { draw: { icon: pfi, text: PFI, accent: green },          press: { page: pfi } }
+      1:  { draw: { icon: switches, text: SW, accent: blue },        press: { page: switches_master } }
+      2:  { draw: { icon: icing, text: ICE, accent: cyan },          press: { page: switches_icing } }
+      3:  { draw: { icon: weather, text: WX, accent: blue },         press: { page: weather } }
+      4:  { draw: { icon: autopilot, text: AP, accent: red },        press: { page: ap } }
+      5:  { draw: { icon: gcu, text: GCU, accent: gray },            press: { page: gcu479 } }
+      6:  { draw: { icon: radio, text: COM, accent: yellow },        press: { page: radio_com1 } }
+      7:  { draw: { icon: engine, text: ENG, accent: green },        press: { page: engine } }
+      8:  { draw: { icon: views, text: VIEW, accent: gray },         press: { page: views } }
+      9:  { draw: { icon: transponder, text: XPDR, accent: orange }, press: { page: transponder } }
+      10: { draw: { icon: fms, text: FMS, accent: red },             press: { page: fms } }
 
   # Primary flight instruments + engine/warning summary. Source fills all 12
   # keys; multi-value keys collapse to one reading, warning lamps -> annunciators,
   # and key 11's gps_nav_id (a string) can't render so it shows waypoint distance.
   pfi:
     keys:
-      0: { draw: { text: SPD, value: sim/cockpit2/gauges/indicators/airspeed_kts_pilot, format: "{:.0}" } }
-      1: { draw: { text: HDG, value: sim/cockpit2/gauges/indicators/compass_heading_deg_mag, format: "{:.0}" } }
-      2: { draw: { text: ALT, value: sim/cockpit2/gauges/indicators/altitude_ft_pilot, format: "{:.0}" } }
-      3: { draw: { text: VS, value: sim/cockpit2/gauges/indicators/vvi_fpm_pilot, format: "{:.0}" } }
+      0: { draw: { text: SPD, value: sim/cockpit2/gauges/indicators/airspeed_kts_pilot, format: "{:.0}", font: seven-seg } }
+      1: { draw: { text: HDG, value: sim/cockpit2/gauges/indicators/compass_heading_deg_mag, format: "{:.0}", font: seven-seg } }
+      2: { draw: { text: ALT, value: sim/cockpit2/gauges/indicators/altitude_ft_pilot, format: "{:.0}", font: seven-seg } }
+      3: { draw: { text: VS, value: sim/cockpit2/gauges/indicators/vvi_fpm_pilot, format: "{:.0}", font: seven-seg } }
       4: { draw: { text: "FUEL L", value: "sim/cockpit2/fuel/fuel_quantity[0]", scale: 0.3676, format: "{:.1}" } }   # kg -> US gal (/2.72)
       5: { draw: { text: EGT, value: "sim/cockpit2/engine/indicators/EGT_deg_cel[0]", format: "{:.0}" } }
       6: { draw: { text: "OIL T", value: "sim/cockpit2/engine/indicators/oil_temperature_deg_C[0]", format: "{:.0}" } }
       7: { draw: { text: AMP, value: "sim/cockpit2/electrical/battery_amps[0]", format: "{:.1}" } }
-      8: { draw: { text: RPM, value: "sim/cockpit2/engine/indicators/prop_speed_rpm[0]", format: "{:.0}" } }
+      8: { draw: { text: RPM, value: "sim/cockpit2/engine/indicators/prop_speed_rpm[0]", format: "{:.0}", font: seven-seg } }
       9:  { draw: { text: "OIL P", value: sim/cockpit/warnings/annunciators/oil_pressure, lit_color: red } }
       10: { draw: { text: "FUEL P", value: sim/cockpit/warnings/annunciators/fuel_pressure, lit_color: orange } }
       11: { draw: { text: "WPT DIS", value: sim/cockpit2/radios/indicators/gps_dme_distance_nm, format: "{:.1}" } }
@@ -186,9 +188,9 @@ pages:
   # from their selection dataref. e0/e1 tune coarse/fine (cw = down, per source).
   radio_com1:
     keys:
-      0: { draw: { text: STBY, value: sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833, scale: 0.001, format: "{:.3}" }, press: { command: sim/GPS/g1000n1_com_ff } }
+      0: { draw: { text: STBY, value: sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg }, press: { command: sim/GPS/g1000n1_com_ff } }
       1: { draw: { text: "<> SWAP" }, press: { command: sim/GPS/g1000n1_com_ff } }
-      2: { draw: { text: COM1, value: sim/cockpit2/radios/actuators/com1_frequency_hz_833, scale: 0.001, format: "{:.3}" } }
+      2: { draw: { text: COM1, value: sim/cockpit2/radios/actuators/com1_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg } }
       3: { draw: { text: AUDIO, value: laminar/sr22/annunciators/audio/com1, lit_color: cyan }, press: { command: sim/audio_panel/select_audio_com1 } }
       7: { draw: { text: MIC1, value: laminar/sr22/annunciators/audio/mic1, lit_color: cyan }, press: { command: sim/audio_panel/transmit_audio_com1 } }
       8: { draw: { text: COM1 } }
@@ -209,9 +211,9 @@ pages:
 
   radio_com2:
     keys:
-      0: { draw: { text: STBY, value: sim/cockpit2/radios/actuators/com2_standby_frequency_hz_833, scale: 0.001, format: "{:.3}" }, press: { command: sim/radios/com2_standy_flip } }
+      0: { draw: { text: STBY, value: sim/cockpit2/radios/actuators/com2_standby_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg }, press: { command: sim/radios/com2_standy_flip } }
       1: { draw: { text: "<> SWAP" }, press: { command: sim/radios/com2_standy_flip } }
-      2: { draw: { text: COM2, value: sim/cockpit2/radios/actuators/com2_frequency_hz_833, scale: 0.001, format: "{:.3}" } }
+      2: { draw: { text: COM2, value: sim/cockpit2/radios/actuators/com2_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg } }
       3: { draw: { text: AUDIO, value: laminar/sr22/annunciators/audio/com2, lit_color: cyan }, press: { command: sim/audio_panel/select_audio_com2 } }
       7: { draw: { text: MIC2, value: laminar/sr22/annunciators/audio/mic2, lit_color: cyan }, press: { command: sim/audio_panel/transmit_audio_com2 } }
       8: { draw: { text: "← COM1" }, press: { page: radio_com1 } }
@@ -233,9 +235,9 @@ pages:
   # NAV1/NAV2. Frequencies are 10s of kHz -> MHz (scale 0.01).
   radio_nav1:
     keys:
-      0: { draw: { text: STBY, value: sim/cockpit/radios/nav1_stdby_freq_hz, scale: 0.01, format: "{:.2}" }, press: { command: sim/GPS/g1000n3_nav_ff } }
+      0: { draw: { text: STBY, value: sim/cockpit/radios/nav1_stdby_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg }, press: { command: sim/GPS/g1000n3_nav_ff } }
       1: { draw: { text: "<> SWAP" }, press: { command: sim/GPS/g1000n3_nav_ff } }
-      2: { draw: { text: NAV1, value: sim/cockpit/radios/nav1_freq_hz, scale: 0.01, format: "{:.2}" } }
+      2: { draw: { text: NAV1, value: sim/cockpit/radios/nav1_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg } }
       3: { draw: { text: AUDIO, value: laminar/sr22/annunciators/audio/nav1, lit_color: cyan }, press: { command: sim/audio_panel/select_audio_nav1 } }
       8: { draw: { text: "← COM1" }, press: { page: radio_com1 } }
       9: { draw: { text: "COM2 →" }, press: { page: radio_com2 } }
@@ -255,9 +257,9 @@ pages:
 
   radio_nav2:
     keys:
-      0: { draw: { text: STBY, value: sim/cockpit/radios/nav2_stdby_freq_hz, scale: 0.01, format: "{:.2}" }, press: { command: sim/radios/nav2_standy_flip } }
+      0: { draw: { text: STBY, value: sim/cockpit/radios/nav2_stdby_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg }, press: { command: sim/radios/nav2_standy_flip } }
       1: { draw: { text: "<> SWAP" }, press: { command: sim/radios/nav2_standy_flip } }
-      2: { draw: { text: NAV2, value: sim/cockpit/radios/nav2_freq_hz, scale: 0.01, format: "{:.2}" } }
+      2: { draw: { text: NAV2, value: sim/cockpit/radios/nav2_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg } }
       3: { draw: { text: AUDIO, value: laminar/sr22/annunciators/audio/nav2, lit_color: cyan }, press: { command: sim/audio_panel/select_audio_nav2 } }
       8: { draw: { text: "← COM1" }, press: { page: radio_com1 } }
       9: { draw: { text: "COM2 →" }, press: { page: radio_com2 } }
@@ -281,7 +283,7 @@ pages:
   # uncomputable here, so they're plain command buttons.
   transponder:
     keys:
-      0: { draw: { text: SQUAWK, value: sim/cockpit/radios/transponder_code, format: "{:.0}" }, press: { command: sim/transponder/transponder_thousands_up } }
+      0: { draw: { text: SQUAWK, value: sim/cockpit/radios/transponder_code, format: "{:.0}", font: seven-seg }, press: { command: sim/transponder/transponder_thousands_up } }
       1: { draw: { text: "+100" }, press: { command: sim/transponder/transponder_hundreds_up } }
       2: { draw: { text: "+10" }, press: { command: sim/transponder/transponder_tens_up } }
       3: { draw: { text: "+1" }, press: { command: sim/transponder/transponder_ones_up } }

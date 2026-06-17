@@ -45,5 +45,14 @@ fn main() {
     let glyph = icon_glyph("engine").unwrap();
     save(&format!("{dir}/icon.png"), 90, 90, &r.icon_key(glyph, Some("ENG"), &s));
 
+    // New visuals: 7-segment readout, and an accent-barred key.
+    let seg = Style { seven_seg: true, ..s };
+    save(&format!("{dir}/key_seg.png"), 90, 90, &r.key(Some("STBY"), Some("121.300"), &seg));
+    save(&format!("{dir}/key_squawk.png"), 90, 90, &r.key(Some("SQUAWK"), Some("1200"), &seg));
+    let accent = Style { accent: Some([40, 200, 60]), ..s };
+    save(&format!("{dir}/key_accent.png"), 90, 90, &r.key(Some("SPD"), Some("145"), &accent));
+    let icon_accent = Style { accent: Some([230, 210, 40]), ..s };
+    save(&format!("{dir}/icon_accent.png"), 90, 90, &r.icon_key(glyph, Some("ENG"), &icon_accent));
+
     println!("wrote {dir}/*.png");
 }

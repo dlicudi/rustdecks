@@ -37,3 +37,8 @@ to what `Draw` supports — **one value per key**, numbers only:
 - **String datarefs** (e.g. `gps_nav_id`) are unsupported — substitute a numeric proxy and note it.
 
 Document any such compromise in a comment on the page, as `pfi` does.
+
+For visual fidelity, `Draw` also has `font: seven-seg` (a 7-segment avionics face
+for numeric readouts — frequencies, squawk, PFI values) and `accent` (a colored
+top bar, e.g. to colour-match an index icon to its nav-button LED). Annunciators
+render as a glowing LED bar on a dark tile, not a full-cell flood.
