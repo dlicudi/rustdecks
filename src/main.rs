@@ -7,18 +7,13 @@
 //!   render     key/side-strip image composition
 //!   app        wiring: events -> actions, dataref updates -> redraws
 
-mod app;
-mod config;
-mod device;
-mod render;
-mod sim;
-
 use std::process::ExitCode;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use config::Profile;
-use device::LoupedeckLive;
+use rustdecks::config::Profile;
+use rustdecks::device::LoupedeckLive;
+use rustdecks::{app, render, sim};
 
 fn main() -> ExitCode {
     let arg = match std::env::args().nth(1) {
@@ -34,6 +29,12 @@ fn main() -> ExitCode {
     }
     if arg == "simprobe" {
         return simprobe(std::env::args().nth(2));
+    }
+    if arg == "check" {
+        return check(std::env::args().nth(2));
+    }
+    if arg == "tui" {
+        return tui(std::env::args().nth(2));
     }
     let path = arg;
 
@@ -56,6 +57,60 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Launch the terminal dashboard (monitor + virtual deck).
+fn tui(path: Option<String>) -> ExitCode {
+    let Some(path) = path else {
+        eprintln!("usage: rustdecks tui <profile.yaml>");
+        return ExitCode::FAILURE;
+    };
+    let yaml = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cannot read {path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let profile = match Profile::parse(&yaml) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match rustdecks::tui::run(profile) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Parse and validate a profile without touching hardware or the sim.
+fn check(path: Option<String>) -> ExitCode {
+    let Some(path) = path else {
+        eprintln!("usage: rustdecks check <profile.yaml>");
+        return ExitCode::FAILURE;
+    };
+    let yaml = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cannot read {path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match Profile::parse(&yaml) {
+        Ok(p) => {
+            println!("ok: {} pages, home `{}`", p.pages.len(), p.home);
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("{path}: {e}");
             ExitCode::FAILURE
         }
     }

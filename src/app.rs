@@ -5,64 +5,119 @@
 //! into one unified channel; the main thread blocks on it, coalesces bursts,
 //! and redraws only surfaces whose displayed text actually changed.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use crate::config::{Action, Device, Draw, Profile};
+use crate::config::{Action, Device, Draw, Encoder, Led, Profile};
 use crate::device::{Event, LoupedeckLive};
+use crate::mirror::{Cell, DeckState, KeyKind, KeyView, LedView, SharedDeck};
 use crate::render::{self, Renderer, Style};
 use crate::sim::{self, DataValue, Sim, Update};
+
+/// Most recent input events kept for the TUI mirror.
+const EVENT_LOG: usize = 12;
 
 enum AppEvent {
     Input(Event),
     Data(Update),
 }
 
+/// Run normally (drives the physical deck only).
 pub fn run(profile: Profile) -> Result<(), String> {
+    run_inner(profile, None, None)
+}
+
+/// Run while publishing snapshots to `mirror` and accepting injected input
+/// (used by the TUI). Returns only on error.
+pub fn run_mirrored(
+    profile: Profile,
+    mirror: SharedDeck,
+    inject: Receiver<Event>,
+) -> Result<(), String> {
+    run_inner(profile, Some(mirror), Some(inject))
+}
+
+fn run_inner(
+    profile: Profile,
+    mirror: Option<SharedDeck>,
+    inject: Option<Receiver<Event>>,
+) -> Result<(), String> {
     // Only the Loupedeck Live is supported; this match forces a decision here
     // when another device variant is added.
     match profile.device {
         Device::LoupedeckLive => {}
     }
+    // Under the TUI (mirror present) the terminal is in raw/alt-screen mode, so
+    // status lines must stay quiet.
+    let verbose = mirror.is_none();
 
-    // --- Device ---
-    let port = LoupedeckLive::find_port()
-        .ok_or("no Loupedeck found (VID 0x2EC2); is it plugged in?")?;
-    let mut device = LoupedeckLive::connect(&port).map_err(|e| format!("device: {e}"))?;
-    println!("device: connected at {port}");
-    device
-        .set_brightness(profile.brightness)
-        .map_err(|e| e.to_string())?;
+    // --- Device --- (optional: the TUI can run as a virtual deck with none)
+    let connected =
+        LoupedeckLive::find_port().and_then(|p| LoupedeckLive::connect(&p).ok().map(|d| (d, p)));
+    let (mut device, device_status) = match connected {
+        Some((d, port)) => {
+            if verbose { println!("device: connected at {port}"); }
+            (Some(d), format!("connected {port}"))
+        }
+        None if mirror.is_some() => {
+            if verbose { eprintln!("device: none found; TUI virtual-deck mode"); }
+            (None, "offline".to_string())
+        }
+        None => return Err("no Loupedeck found (VID 0x2EC2); is it plugged in?".into()),
+    };
+    if let Some(d) = &mut device {
+        d.set_brightness(profile.brightness).map_err(|e| e.to_string())?;
+    }
 
     // --- Simulator ---
     let host = if profile.sim.host == "auto" {
         match sim::discover(Duration::from_secs(5)) {
             Some(a) => {
-                println!("sim: X-Plane {} at {}", a.xplane_version, a.host);
+                if verbose { println!("sim: X-Plane {} at {}", a.xplane_version, a.host); }
                 a.host
             }
             None => {
-                println!("sim: no beacon; trying 127.0.0.1");
+                if verbose { println!("sim: no beacon; trying 127.0.0.1"); }
                 "127.0.0.1".to_string()
             }
         }
     } else {
         profile.sim.host.clone()
     };
-    let (sim, updates) = Sim::connect(&host, profile.sim.port)?;
-    println!("sim: Web API connected");
+    // The deck still renders (icons, labels, nav, LEDs) without the sim, so a
+    // failed connect is a warning, not a fatal error — live values just stay blank.
+    let (sim, updates) = match Sim::connect(&host, profile.sim.port) {
+        Ok((s, rx)) => {
+            if verbose { println!("sim: Web API connected"); }
+            (Some(s), rx)
+        }
+        Err(e) => {
+            if verbose { eprintln!("sim: not connected ({e}); running without live data"); }
+            let (_dead, rx) = mpsc::channel(); // never fires
+            (None, rx)
+        }
+    };
+    let sim_status = match &sim {
+        Some(_) => format!("connected {host}"),
+        None => "offline".to_string(),
+    };
 
     let renderer = Renderer::new()?;
 
     // --- Unified event channel ---
     let (tx, rx) = mpsc::channel::<AppEvent>();
-    let reader = device.reader().map_err(|e| e.to_string())?;
     let (dev_tx, dev_rx) = mpsc::channel();
-    thread::spawn(move || reader.run(dev_tx));
+    if let Some(d) = &device {
+        let reader = d.reader().map_err(|e| e.to_string())?;
+        thread::spawn(move || reader.run(dev_tx));
+    }
     forward(dev_rx, tx.clone(), AppEvent::Input);
-    forward(updates, tx, AppEvent::Data);
+    forward(updates, tx.clone(), AppEvent::Data);
+    if let Some(inject) = inject {
+        forward(inject, tx, AppEvent::Input); // TUI keyboard -> synthetic input
+    }
 
     let mut app = App {
         profile,
@@ -74,15 +129,29 @@ pub fn run(profile: Profile) -> Result<(), String> {
         cmd_ids: HashMap::new(),
         current_page: String::new(),
         pending_page: None,
+        eff_encoders: HashMap::new(),
+        eff_leds: HashMap::new(),
         key_pressed: [false; 12],
         enc_pressed: [false; 6],
         btn_pressed: [false; 8],
         last: HashMap::new(),
+        mirror,
+        events: VecDeque::new(),
+        device_status,
+        sim_status,
+        updates: 0,
+        total_updates: 0,
+        rate: 0.0,
+        redraws: 0,
+        total_redraws: 0,
+        redraw_rate: 0.0,
+        window: Instant::now(),
     };
 
     let home = app.profile.home.clone();
     app.load_page(&home);
-    println!("running page `{home}`; Ctrl-C to exit");
+    app.publish();
+    if verbose { println!("running page `{home}`; Ctrl-C to exit"); }
 
     // --- Main loop: block, drain the burst, then redraw what changed ---
     while let Ok(ev) = rx.recv() {
@@ -94,6 +163,8 @@ pub fn run(profile: Profile) -> Result<(), String> {
             Some(page) => app.load_page(&page),
             None => app.redraw_changed(),
         }
+        app.update_rate();
+        app.publish();
     }
     Ok(())
 }
@@ -123,19 +194,35 @@ enum Surface {
 
 struct App {
     profile: Profile,
-    device: LoupedeckLive,
-    sim: Sim,
+    device: Option<LoupedeckLive>,
+    sim: Option<Sim>,
     renderer: Renderer,
     values: HashMap<i64, DataValue>,
     dr_ids: HashMap<String, Option<i64>>,
     cmd_ids: HashMap<String, Option<i64>>,
     current_page: String,
     pending_page: Option<String>,
+    /// Current page's encoders/leds, profile defaults merged with page overrides.
+    eff_encoders: HashMap<String, Encoder>,
+    eff_leds: HashMap<String, Led>,
     key_pressed: [bool; 12],
     enc_pressed: [bool; 6],
     btn_pressed: [bool; 8],
     /// Last rendered text content per surface, to suppress redundant redraws.
     last: HashMap<Surface, String>,
+    /// TUI mirror (None when driving only the physical deck).
+    mirror: Option<SharedDeck>,
+    events: VecDeque<String>,
+    device_status: String,
+    sim_status: String,
+    /// Throughput metering for the TUI: dataref updates in, redraws pushed out.
+    updates: u64,
+    total_updates: u64,
+    rate: f64,
+    redraws: u64,
+    total_redraws: u64,
+    redraw_rate: f64,
+    window: Instant,
 }
 
 impl App {
@@ -144,11 +231,14 @@ impl App {
             AppEvent::Input(e) => self.handle_input(e),
             AppEvent::Data(u) => {
                 self.values.insert(u.id, u.value);
+                self.updates += 1;
+                self.total_updates += 1;
             }
         }
     }
 
     fn handle_input(&mut self, e: Event) {
+        self.log_event(e);
         match e {
             Event::Key { index, pressed } => {
                 if self.edge(index as usize, pressed, Input::Key) {
@@ -197,27 +287,31 @@ impl App {
         self.page().keys.get(&index)?.press.clone()
     }
     fn encoder_turn_action(&self, index: u8, cw: bool) -> Option<Action> {
-        let e = self.page().encoders.get(&format!("e{index}"))?;
+        let e = self.eff_encoders.get(&format!("e{index}"))?;
         if cw { e.turn_cw.clone() } else { e.turn_ccw.clone() }
     }
     fn encoder_press_action(&self, index: u8) -> Option<Action> {
-        self.page().encoders.get(&format!("e{index}"))?.press.clone()
+        self.eff_encoders.get(&format!("e{index}"))?.press.clone()
     }
     fn led_action(&self, index: u8) -> Option<Action> {
-        self.page().leds.get(&format!("b{index}"))?.press.clone()
+        self.eff_leds.get(&format!("b{index}"))?.press.clone()
     }
 
     fn execute(&mut self, action: Action) {
         match action {
             Action::Command { command } => {
                 if let Some(id) = self.command_id(&command) {
-                    self.sim.run_command(id);
+                    if let Some(s) = self.sim.as_ref() {
+                        s.run_command(id);
+                    }
                 }
             }
             Action::SetDataref { dataref, value } => {
                 let (name, _) = sim::split_ref(&dataref);
                 if let Some(id) = self.dataref_id(name) {
-                    self.sim.set_dataref(id, value);
+                    if let Some(s) = self.sim.as_ref() {
+                        s.set_dataref(id, value);
+                    }
                 }
             }
             Action::Page { page } => self.pending_page = Some(page),
@@ -234,6 +328,11 @@ impl App {
         self.current_page = name.to_string();
         self.last.clear();
 
+        // Merge inherited defaults with this page's encoders/leds (page wins per id).
+        let page = &self.profile.pages[name];
+        self.eff_encoders = merge(&self.profile.encoders, &page.encoders);
+        self.eff_leds = merge(&self.profile.leds, &page.leds);
+
         // Resolve and subscribe every dataref the page displays.
         let refs = self.page_value_refs();
         let mut ids = Vec::new();
@@ -245,13 +344,15 @@ impl App {
                 }
             }
         }
-        self.sim.subscribe(&ids);
+        if let Some(s) = self.sim.as_ref() {
+            s.subscribe(&ids);
+        }
 
         // Static LED colors.
         for b in 0..8u8 {
-            if let Some(led) = self.page().leds.get(&format!("b{b}")) {
+            if let Some(led) = self.eff_leds.get(&format!("b{b}")) {
                 if let Some(rgb) = led.color.as_deref().and_then(render::parse_color) {
-                    let _ = self.device.set_button_color(b, rgb);
+                    self.dev_set_color(b, rgb);
                 }
             }
         }
@@ -275,16 +376,59 @@ impl App {
 
     fn render_key(&mut self, index: u8) {
         let draw = self.page().keys.get(&index).and_then(|k| k.draw.as_ref());
-        let Some(draw) = draw else { return };
+        // No draw on this page: blank the key so leftovers from a prior page
+        // (e.g. the index menu's icons) don't linger after a page switch.
+        let Some(draw) = draw else {
+            let content = String::new();
+            if self.last.get(&Surface::Key(index)) == Some(&content) {
+                return;
+            }
+            let buf = self.renderer.key(None, None, &Style::default());
+            if self.dev_draw_key(index, &buf) {
+                self.last.insert(Surface::Key(index), content);
+            }
+            return;
+        };
+
+        // Icon: an icon glyph (optionally with a label) — for nav/menu keys.
+        if let Some(glyph) = draw.icon.as_deref().and_then(render::icon_glyph) {
+            let label = draw.text.clone();
+            let content = format!("I\u{0}{glyph}\u{0}{}", label.as_deref().unwrap_or(""));
+            if self.last.get(&Surface::Key(index)) == Some(&content) {
+                return;
+            }
+            let style = style_for(draw);
+            let buf = self.renderer.icon_key(glyph, label.as_deref(), &style);
+            if self.dev_draw_key(index, &buf) {
+                self.last.insert(Surface::Key(index), content);
+            }
+            return;
+        }
+
+        // Annunciator: lit_color present -> on/off rendering driven by the value.
+        if let Some(lit_color) = draw.lit_color.as_deref().and_then(render::parse_color) {
+            let lit = self.value_number(draw).map(|v| v >= 0.5).unwrap_or(false);
+            let label = draw.text.clone().unwrap_or_default();
+            let content = format!("A\u{0}{lit}\u{0}{label}");
+            if self.last.get(&Surface::Key(index)) == Some(&content) {
+                return;
+            }
+            let buf = self.renderer.annunciator(&label, lit, lit_color, &Style::default());
+            if self.dev_draw_key(index, &buf) {
+                self.last.insert(Surface::Key(index), content);
+            }
+            return;
+        }
+
         let label = draw.text.clone();
         let value = self.value_text(draw);
+        let style = style_for(draw);
         let content = format!("{}\u{0}{}", label.as_deref().unwrap_or(""), value.as_deref().unwrap_or(""));
         if self.last.get(&Surface::Key(index)) == Some(&content) {
             return;
         }
-        let style = style_for(draw);
         let buf = self.renderer.key(label.as_deref(), value.as_deref(), &style);
-        if self.device.draw_key(index, &buf).is_ok() {
+        if self.dev_draw_key(index, &buf) {
             self.last.insert(Surface::Key(index), content);
         }
     }
@@ -298,34 +442,51 @@ impl App {
             return;
         }
         let buf = self.renderer.side_strip(&cells, &Style::default());
-        let ok = match side {
-            Surface::Left => self.device.draw_left(&buf),
-            _ => self.device.draw_right(&buf),
-        };
-        if ok.is_ok() {
+        if self.dev_draw_strip(side == Surface::Left, &buf) {
             self.last.insert(side, content);
         }
     }
 
+    // Device draws are no-ops (returning success) when running without hardware.
+    // Both count toward the redraw meter: they're only reached after the `last`
+    // change-tracking cache misses, so they equal the work actually pushed.
+    fn dev_draw_key(&mut self, index: u8, buf: &[u8]) -> bool {
+        self.redraws += 1;
+        self.total_redraws += 1;
+        self.device.as_mut().map_or(true, |d| d.draw_key(index, buf).is_ok())
+    }
+    fn dev_draw_strip(&mut self, left: bool, buf: &[u8]) -> bool {
+        self.redraws += 1;
+        self.total_redraws += 1;
+        self.device.as_mut().map_or(true, |d| {
+            if left { d.draw_left(buf) } else { d.draw_right(buf) }.is_ok()
+        })
+    }
+    fn dev_set_color(&mut self, index: u8, rgb: [u8; 3]) {
+        if let Some(d) = self.device.as_mut() {
+            let _ = d.set_button_color(index, rgb);
+        }
+    }
+
     fn enc_cell(&self, index: u8) -> Option<(String, String)> {
-        let draw = self
-            .page()
-            .encoders
-            .get(&format!("e{index}"))?
-            .draw
-            .as_ref()?;
+        let draw = self.eff_encoders.get(&format!("e{index}"))?.draw.as_ref()?;
         let label = draw.text.clone().unwrap_or_default();
         let value = self.value_text(draw).unwrap_or_default();
         Some((label, value))
     }
 
-    /// The formatted display string for a draw's `value` dataref, if data exists.
-    fn value_text(&self, draw: &Draw) -> Option<String> {
+    /// The raw `value` dataref reading, scaled and offset, if data exists.
+    fn value_number(&self, draw: &Draw) -> Option<f64> {
         let vref = draw.value.as_ref()?;
         let (name, index) = sim::split_ref(vref);
         let id = (*self.dr_ids.get(name)?)?;
         let raw = self.values.get(&id)?.scalar(index)?;
-        let v = raw * draw.scale.unwrap_or(1.0) + draw.offset.unwrap_or(0.0);
+        Some(raw * draw.scale.unwrap_or(1.0) + draw.offset.unwrap_or(0.0))
+    }
+
+    /// The formatted display string for a draw's `value`, if data exists.
+    fn value_text(&self, draw: &Draw) -> Option<String> {
+        let v = self.value_number(draw)?;
         Some(format_value(draw.format.as_deref().unwrap_or("{}"), v))
     }
 
@@ -337,9 +498,8 @@ impl App {
 
     /// Every dataref reference shown on the current page (keys + encoders).
     fn page_value_refs(&self) -> Vec<String> {
-        let page = self.page();
-        let keys = page.keys.values().filter_map(|k| k.draw.as_ref());
-        let encs = page.encoders.values().filter_map(|e| e.draw.as_ref());
+        let keys = self.page().keys.values().filter_map(|k| k.draw.as_ref());
+        let encs = self.eff_encoders.values().filter_map(|e| e.draw.as_ref());
         keys.chain(encs).filter_map(|d| d.value.clone()).collect()
     }
 
@@ -347,7 +507,8 @@ impl App {
         if let Some(cached) = self.dr_ids.get(name) {
             return *cached;
         }
-        let id = self.sim.dataref(name).map(|m| m.id);
+        let sim = self.sim.as_ref()?; // no sim -> unresolved, don't cache
+        let id = sim.dataref(name).map(|m| m.id);
         self.dr_ids.insert(name.to_string(), id);
         id
     }
@@ -356,10 +517,132 @@ impl App {
         if let Some(cached) = self.cmd_ids.get(name) {
             return *cached;
         }
-        let id = self.sim.command(name);
+        let sim = self.sim.as_ref()?;
+        let id = sim.command(name);
         self.cmd_ids.insert(name.to_string(), id);
         id
     }
+
+    // --- TUI mirror ---
+
+    fn log_event(&mut self, e: Event) {
+        if self.mirror.is_none() {
+            return;
+        }
+        let line = match e {
+            Event::Key { index, pressed } => format!("key {index} {}", down(pressed)),
+            Event::EncoderTurn { index, clockwise } => {
+                format!("e{index} turn {}", if clockwise { "cw" } else { "ccw" })
+            }
+            Event::EncoderPress { index, pressed } => format!("e{index} push {}", down(pressed)),
+            Event::Button { index, pressed } => format!("b{index} {}", down(pressed)),
+        };
+        if self.events.len() == EVENT_LOG {
+            self.events.pop_front();
+        }
+        self.events.push_back(line);
+    }
+
+    /// Recompute the dataref-update rate once per window has elapsed. The loop
+    /// only wakes on events, so the rate naturally reflects active traffic.
+    fn update_rate(&mut self) {
+        let elapsed = self.window.elapsed();
+        if elapsed >= Duration::from_millis(500) {
+            let secs = elapsed.as_secs_f64();
+            self.rate = self.updates as f64 / secs;
+            self.redraw_rate = self.redraws as f64 / secs;
+            self.updates = 0;
+            self.redraws = 0;
+            self.window = Instant::now();
+        }
+    }
+
+    /// Publish the current visual state to the TUI mirror, if attached.
+    fn publish(&self) {
+        let Some(mirror) = &self.mirror else { return };
+        let mut state = DeckState {
+            device: self.device_status.clone(),
+            sim: self.sim_status.clone(),
+            page: self.current_page.clone(),
+            datarefs: self.dataref_views(),
+            events: self.events.iter().cloned().collect(),
+            rate: self.rate,
+            total_updates: self.total_updates,
+            redraw_rate: self.redraw_rate,
+            total_redraws: self.total_redraws,
+            ..Default::default()
+        };
+        for i in 0..12u8 {
+            state.keys[i as usize] = self.key_view(i);
+        }
+        for i in 0..3u8 {
+            state.left[i as usize] = self.enc_cell(i).map(cell).unwrap_or_default();
+            state.right[i as usize] = self.enc_cell(i + 3).map(cell).unwrap_or_default();
+        }
+        for b in 0..8u8 {
+            state.leds[b as usize] = self.led_view(b);
+        }
+        if let Ok(mut guard) = mirror.lock() {
+            *guard = state;
+        }
+    }
+
+    fn key_view(&self, index: u8) -> KeyView {
+        let Some(draw) = self.page().keys.get(&index).and_then(|k| k.draw.as_ref()) else {
+            return KeyView::default();
+        };
+        let label = draw.text.clone().unwrap_or_default();
+        if draw.icon.is_some() {
+            return KeyView { kind: KeyKind::Icon, label, value: String::new() };
+        }
+        if draw.lit_color.is_some() {
+            let lit = self.value_number(draw).map(|v| v >= 0.5).unwrap_or(false);
+            return KeyView { kind: KeyKind::Annunciator { lit }, label, value: String::new() };
+        }
+        KeyView {
+            kind: KeyKind::Text,
+            label,
+            value: self.value_text(draw).unwrap_or_default(),
+        }
+    }
+
+    fn led_view(&self, index: u8) -> LedView {
+        let Some(led) = self.eff_leds.get(&format!("b{index}")) else {
+            return LedView::default();
+        };
+        let rgb = led.color.as_deref().and_then(render::parse_color);
+        let target = match &led.press {
+            Some(Action::Page { page }) => page.clone(),
+            _ => String::new(),
+        };
+        LedView { on: rgb.is_some(), rgb: rgb.unwrap_or_default(), target }
+    }
+
+    /// Resolved datarefs and their current formatted values, for display.
+    fn dataref_views(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for (name, id) in &self.dr_ids {
+            if let Some(value) = id.and_then(|i| self.values.get(&i)) {
+                if let Some(v) = value.scalar(None) {
+                    out.push((name.clone(), format!("{v:.2}")));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+}
+
+fn down(pressed: bool) -> &'static str {
+    if pressed {
+        "down"
+    } else {
+        "up"
+    }
+}
+
+fn cell((label, value): (String, String)) -> Cell {
+    Cell { label, value }
 }
 
 enum Input {
@@ -368,14 +651,29 @@ enum Input {
     Btn,
 }
 
+/// Merge inherited defaults with page overrides (page wins per id).
+fn merge<T: Clone>(
+    defaults: &std::collections::BTreeMap<String, T>,
+    page: &std::collections::BTreeMap<String, T>,
+) -> HashMap<String, T> {
+    let mut m: HashMap<String, T> = defaults.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    for (k, v) in page {
+        m.insert(k.clone(), v.clone());
+    }
+    m
+}
+
 fn style_for(draw: &Draw) -> Style {
     let mut s = Style::default();
     if let Some(rgb) = draw.text_color.as_deref().and_then(render::parse_color) {
-        s.text_color = rgb;
+        s.label_color = rgb;
+        s.value_color = rgb;
     }
     if let Some(rgb) = draw.bg_color.as_deref().and_then(render::parse_color) {
         s.bg_color = rgb;
     }
+    s.accent = draw.accent.as_deref().and_then(render::parse_color);
+    s.seven_seg = matches!(draw.font.as_deref(), Some("seven-seg" | "segment" | "7seg"));
     s
 }
 

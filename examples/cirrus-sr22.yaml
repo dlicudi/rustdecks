@@ -1,0 +1,418 @@
+# Cirrus SR22 (Laminar) — Loupedeck Live profile.
+# Faithful port of the cockpitdecks SR22 `loupedecklive1` deck
+# (~/GitHub/cockpitdecks-configs/decks/cirrus-sr22), within the rustdecks subset.
+#
+# Subset notes (see CLAUDE.md): rustdecks shows ONE value per key and supports
+# only command / page / set-dataref actions. So the source's multi-value keys
+# collapse to a primary reading; warning/state lamps become annunciators
+# (lit_color + a 0/1 dataref, lit at value >= 0.5); `== N` state formulas and
+# string/computed datarefs can't be expressed and fall back to plain labels;
+# and `sweep` switches (which cycle a position list) bind their "on" command
+# only — you can switch on from the deck but not back off. Such compromises are
+# flagged inline.
+#
+# Navigation is the 8 round hardware buttons (b0..b7), inherited by every page:
+#   b0 home  b1 PFI  b2 switches  b3 AP  b4 radio  b5 engine  b6 FMS  b7 XPDR
+# The `index` page mirrors this as an icon menu on the screen keys.
+
+device: loupedeck-live
+brightness: 0.7
+sim:
+  host: auto
+  port: 8086
+
+home: index
+
+# --- inherited by every page (the FCU encoder set, from includes/encoder_fcu) ---
+
+encoders:
+  e0:
+    draw: { text: THR, value: "sim/flightmodel/engine/ENGN_thro[0]", scale: 100.0, format: "{:.0}%" }
+    turn_cw: { command: sim/engines/throttle_up }
+    turn_ccw: { command: sim/engines/throttle_down }
+    press: { command: sim/engines/throttle_full }
+  e1:
+    draw: { text: HDG, value: sim/cockpit/autopilot/heading_mag, format: "{:.0}" }
+    turn_cw: { command: sim/autopilot/heading_up }
+    turn_ccw: { command: sim/autopilot/heading_down }
+    press: { command: sim/autopilot/heading_sync }
+  e2:
+    draw: { text: QNH, value: sim/cockpit/misc/barometer_setting, format: "{:.2}" }
+    turn_cw: { command: sim/instruments/barometer_up }
+    turn_ccw: { command: sim/instruments/barometer_down }
+    press: { command: sim/instruments/barometer_std }
+  e3:
+    draw: { text: ALT, value: sim/cockpit2/autopilot/altitude_dial_ft, format: "{:.0}" }
+    turn_cw: { command: sim/autopilot/altitude_up }
+    turn_ccw: { command: sim/autopilot/altitude_down }
+  e4:
+    draw: { text: VS, value: sim/cockpit/autopilot/vertical_velocity, format: "{:.0}" }
+    turn_cw: { command: sim/autopilot/vertical_speed_up }
+    turn_ccw: { command: sim/autopilot/vertical_speed_down }
+    press: { command: sim/autopilot/vertical_speed_sync }
+  e5:
+    draw: { text: MIX, value: "sim/flightmodel/engine/ENGN_mixt[0]", scale: 100.0, format: "{:.0}%" }
+    turn_cw: { command: sim/engines/mixture_up }
+    turn_ccw: { command: sim/engines/mixture_down }
+    press: { command: sim/engines/mixture_max }
+
+# Nav LEDs (from includes/pager): colors and targets match the source pager.
+leds:
+  b0: { color: orange, press: { page: index } }
+  b1: { color: green, press: { page: pfi } }
+  b2: { color: blue, press: { page: switches_master } }
+  b3: { color: red, press: { page: ap } }
+  b4: { color: yellow, press: { page: radio_com1 } }
+  b5: { color: green, press: { page: engine } }
+  b6: { color: red, press: { page: fms } }
+  b7: { color: orange, press: { page: transponder } }
+
+pages:
+  # Home: an icon menu mirroring the cockpitdecks index page.
+  # Each icon carries a top accent bar colour-matched to the round nav button
+  # (b0..b7) that opens the same page, tying the screen icon to its LED.
+  index:
+    keys:
+      0:  { draw: { icon: pfi, text: PFI, accent: green },          press: { page: pfi } }
+      1:  { draw: { icon: switches, text: SW, accent: blue },        press: { page: switches_master } }
+      2:  { draw: { icon: icing, text: ICE, accent: cyan },          press: { page: switches_icing } }
+      3:  { draw: { icon: weather, text: WX, accent: blue },         press: { page: weather } }
+      4:  { draw: { icon: autopilot, text: AP, accent: red },        press: { page: ap } }
+      5:  { draw: { icon: gcu, text: GCU, accent: gray },            press: { page: gcu479 } }
+      6:  { draw: { icon: radio, text: COM, accent: yellow },        press: { page: radio_com1 } }
+      7:  { draw: { icon: engine, text: ENG, accent: green },        press: { page: engine } }
+      8:  { draw: { icon: views, text: VIEW, accent: gray },         press: { page: views } }
+      9:  { draw: { icon: transponder, text: XPDR, accent: orange }, press: { page: transponder } }
+      10: { draw: { icon: fms, text: FMS, accent: red },             press: { page: fms } }
+
+  # Primary flight instruments + engine/warning summary. Source fills all 12
+  # keys; multi-value keys collapse to one reading, warning lamps -> annunciators,
+  # and key 11's gps_nav_id (a string) can't render so it shows waypoint distance.
+  pfi:
+    keys:
+      0: { draw: { text: SPD, value: sim/cockpit2/gauges/indicators/airspeed_kts_pilot, format: "{:.0}", font: seven-seg } }
+      1: { draw: { text: HDG, value: sim/cockpit2/gauges/indicators/compass_heading_deg_mag, format: "{:.0}", font: seven-seg } }
+      2: { draw: { text: ALT, value: sim/cockpit2/gauges/indicators/altitude_ft_pilot, format: "{:.0}", font: seven-seg } }
+      3: { draw: { text: VS, value: sim/cockpit2/gauges/indicators/vvi_fpm_pilot, format: "{:.0}", font: seven-seg } }
+      4: { draw: { text: "FUEL L", value: "sim/cockpit2/fuel/fuel_quantity[0]", scale: 0.3676, format: "{:.1}" } }   # kg -> US gal (/2.72)
+      5: { draw: { text: EGT, value: "sim/cockpit2/engine/indicators/EGT_deg_cel[0]", format: "{:.0}" } }
+      6: { draw: { text: "OIL T", value: "sim/cockpit2/engine/indicators/oil_temperature_deg_C[0]", format: "{:.0}" } }
+      7: { draw: { text: AMP, value: "sim/cockpit2/electrical/battery_amps[0]", format: "{:.1}" } }
+      8: { draw: { text: RPM, value: "sim/cockpit2/engine/indicators/prop_speed_rpm[0]", format: "{:.0}", font: seven-seg } }
+      9:  { draw: { text: "OIL P", value: sim/cockpit/warnings/annunciators/oil_pressure, lit_color: red } }
+      10: { draw: { text: "FUEL P", value: sim/cockpit/warnings/annunciators/fuel_pressure, lit_color: orange } }
+      11: { draw: { text: "WPT DIS", value: sim/cockpit2/radios/indicators/gps_dme_distance_nm, format: "{:.1}" } }
+
+  # Autopilot / FCU. Mode lamps light from each mode's status dataref. VS/FLC
+  # (altitude_mode == 4/5) and GPS/VOR (HSI_selector == N) need `== N` tests the
+  # subset can't do, so they're plain command buttons with no lit state.
+  ap:
+    keys:
+      0: { draw: { text: AP, value: sim/cockpit2/autopilot/servos_on, lit_color: green }, press: { command: sim/autopilot/servos_toggle } }
+      1: { draw: { text: FD, value: sim/cockpit2/autopilot/flight_director_mode, lit_color: cyan }, press: { command: sim/autopilot/fdir_toggle } }
+      2: { draw: { text: HDG, value: sim/cockpit2/autopilot/heading_status, lit_color: green }, press: { command: sim/autopilot/heading } }
+      3: { draw: { text: ALT, value: sim/cockpit2/autopilot/altitude_hold_status, lit_color: green }, press: { command: sim/autopilot/altitude_hold } }
+      4: { draw: { text: NAV, value: sim/cockpit2/autopilot/nav_status, lit_color: green }, press: { command: sim/autopilot/NAV } }
+      5: { draw: { text: VNAV, value: sim/cockpit2/autopilot/vnav_armed, lit_color: cyan }, press: { command: sim/autopilot/vnav } }
+      6: { draw: { text: APR, value: sim/cockpit2/autopilot/approach_status, lit_color: green }, press: { command: sim/autopilot/approach } }
+      7: { draw: { text: "REV/BC", value: sim/cockpit2/autopilot/backcourse_status, lit_color: green }, press: { command: sim/autopilot/back_course } }
+      8: { draw: { text: VS }, press: { command: sim/autopilot/vertical_speed } }
+      9: { draw: { text: FLC }, press: { command: sim/autopilot/level_change } }
+      10: { draw: { text: "HSI GPS" }, press: { command: sim/autopilot/hsi_toggle_gps } }
+      11: { draw: { text: "HSI VOR" }, press: { command: sim/autopilot/hsi_toggle_nav } }
+
+  switches_master:
+    keys:
+      0: { draw: { text: "BAT 2", value: "sim/cockpit2/electrical/battery_on[1]", lit_color: cyan }, press: { command: sim/electrical/battery_2_toggle } }
+      1: { draw: { text: "BAT 1", value: "sim/cockpit2/electrical/battery_on[0]", lit_color: cyan }, press: { command: sim/electrical/battery_1_toggle } }
+      2: { draw: { text: "ALT 1", value: "sim/cockpit2/electrical/generator_on[0]", lit_color: cyan }, press: { command: sim/electrical/generator_1_toggle } }
+      3: { draw: { text: "ALT 2", value: "sim/cockpit2/electrical/generator_on[1]", lit_color: cyan }, press: { command: sim/electrical/generator_2_toggle } }
+      4: { draw: { text: AVIONICS, value: sim/cockpit/electrical/avionics_on, lit_color: cyan }, press: { command: sim/systems/avionics_toggle } }
+      5: { draw: { text: "FLAPS UP" }, press: { command: sim/flight_controls/flaps_up } }
+      6: { draw: { text: FLAPS, value: sim/cockpit2/controls/flap_handle_deploy_ratio, scale: 100.0, format: "{:.0}%" } }
+      7: { draw: { text: "FLAPS DN" }, press: { command: sim/flight_controls/flaps_down } }
+      8: { draw: { text: MASTER } }
+      9: { draw: { text: "LIGHTS →" }, press: { page: switches_lights } }
+      10: { draw: { text: "ICE →" }, press: { page: switches_icing } }
+      11: { draw: { text: "GROUND →" }, press: { page: switches_ground } }
+
+  switches_lights:
+    keys:
+      0: { draw: { text: NAV, value: sim/cockpit2/switches/navigation_lights_on, lit_color: cyan }, press: { command: sim/lights/nav_lights_toggle } }
+      1: { draw: { text: STROBE, value: sim/cockpit2/switches/strobe_lights_on, lit_color: cyan }, press: { command: sim/lights/strobe_lights_toggle } }
+      2: { draw: { text: LAND, value: "sim/cockpit2/switches/landing_lights_switch[0]", lit_color: cyan }, press: { command: sim/lights/landing_01_light_tog } }
+      3: { draw: { text: ICE, value: "sim/cockpit2/switches/generic_lights_switch[12]", lit_color: cyan }, press: { command: sim/lights/generic_13_light_tog } }
+      4: { draw: { text: DOME, value: "sim/cockpit2/switches/generic_lights_switch[4]", lit_color: cyan }, press: { command: sim/lights/generic_05_light_tog } }
+      5: { draw: { text: FLOOD, value: "sim/cockpit2/switches/generic_lights_switch[6]", lit_color: cyan }, press: { command: sim/lights/generic_07_light_tog } }
+      6: { draw: { text: "READ 1", value: "sim/cockpit2/switches/generic_lights_switch[1]", lit_color: cyan }, press: { command: sim/lights/generic_02_light_tog } }
+      7: { draw: { text: EDGE, value: "sim/cockpit2/switches/generic_lights_switch[10]", lit_color: cyan }, press: { command: sim/lights/generic_11_light_tog } }
+      8: { draw: { text: "← MASTER" }, press: { page: switches_master } }
+      9: { draw: { text: LIGHTS } }
+      10: { draw: { text: "ICE →" }, press: { page: switches_icing } }
+      11: { draw: { text: "GROUND →" }, press: { page: switches_ground } }
+
+  # Ice protection. ICE PROTECT, NORM/HIGH and PUMP BKUP are `sweep` switches in
+  # the source; rustdecks binds only the "on" command of each (no toggle-off).
+  switches_icing:
+    keys:
+      0: { draw: { text: PITOT, value: sim/cockpit/switches/pitot_heat_on, lit_color: cyan }, press: { command: sim/ice/pitot_heat0_tog } }
+      1: { draw: { text: "ICE PROT", value: laminar/sr22/switch/ice_protect, lit_color: cyan }, press: { command: laminar/sr22/switch/ice_protect_on } }
+      2: { draw: { text: HIGH, value: laminar/sr22/switch/ice_norm_high, lit_color: cyan }, press: { command: laminar/sr22/switch/ice_protect_high } }
+      3: { draw: { text: MAX, value: laminar/sr22/switch/ice_max, lit_color: white }, press: { command: laminar/sr22/anti_ice_tks_max } }
+      4: { draw: { text: "PUMP BK", value: sim/cockpit2/ice/tks_backup_pump, lit_color: cyan }, press: { command: sim/ice/tks_bkup_on } }
+      5: { draw: { text: WSHLD, value: sim/cockpit/switches/anti_ice_window_heat, lit_color: cyan }, press: { command: sim/ice/window_heat_tog } }
+      8: { draw: { text: "← MASTER" }, press: { page: switches_master } }
+      9: { draw: { text: "LIGHTS →" }, press: { page: switches_lights } }
+      10: { draw: { text: ICE } }
+      11: { draw: { text: "GROUND →" }, press: { page: switches_ground } }
+
+  # Ground ops. Fuel-selector keys (== position) and the FUEL TANKS sweep have no
+  # clean subset mapping, so they're plain command buttons; BOOST PUMP is a sweep
+  # bound via set-dataref to 1 (on only).
+  switches_ground:
+    keys:
+      0: { draw: { text: "FUEL L" }, press: { command: laminar/sr22/fuel_sel_left_select } }
+      1: { draw: { text: "FUEL R" }, press: { command: laminar/sr22/fuel_sel_right_select } }
+      2: { draw: { text: "MAX MIX", value: "sim/cockpit2/engine/actuators/mixture_ratio[0]", lit_color: green }, press: { command: sim/engines/mixture_max } }
+      3: { draw: { text: "ENG START" }, press: { command: sim/starters/engage_starter_1 } }
+      4: { draw: { text: "PARK BRK", value: sim/cockpit2/controls/park_brake_valve, lit_color: red }, press: { command: sim/flight_controls/park_brake_valve_toggle } }
+      5: { draw: { text: "BOOST", value: "sim/cockpit2/engine/actuators/fuel_pump_on[0]", lit_color: cyan }, press: { set-dataref: "sim/cockpit2/engine/actuators/fuel_pump_on[0]", value: 1.0 } }
+      6: { draw: { text: "FUEL OFF" }, press: { command: laminar/sr22/fuel_sel_left_off } }
+      7: { draw: { text: "FUEL SEL", value: laminar/sr22/fuel_selector_pos, format: "{:.0}" } }
+      8: { draw: { text: "← MASTER" }, press: { page: switches_master } }
+      9: { draw: { text: "LIGHTS →" }, press: { page: switches_lights } }
+      10: { draw: { text: "ICE →" }, press: { page: switches_icing } }
+      11: { draw: { text: GROUND } }
+
+  # COM1. STBY/ACTIVE frequencies are kHz -> MHz (scale 0.001). AUDIO/MIC light
+  # from their selection dataref. e0/e1 tune coarse/fine (cw = down, per source).
+  radio_com1:
+    keys:
+      0: { draw: { text: STBY, value: sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg }, press: { command: sim/GPS/g1000n1_com_ff } }
+      1: { draw: { text: "<> SWAP" }, press: { command: sim/GPS/g1000n1_com_ff } }
+      2: { draw: { text: COM1, value: sim/cockpit2/radios/actuators/com1_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg } }
+      3: { draw: { text: AUDIO, value: laminar/sr22/annunciators/audio/com1, lit_color: cyan }, press: { command: sim/audio_panel/select_audio_com1 } }
+      7: { draw: { text: MIC1, value: laminar/sr22/annunciators/audio/mic1, lit_color: cyan }, press: { command: sim/audio_panel/transmit_audio_com1 } }
+      8: { draw: { text: COM1 } }
+      9: { draw: { text: "COM2 →" }, press: { page: radio_com2 } }
+      10: { draw: { text: "NAV1 →" }, press: { page: radio_nav1 } }
+      11: { draw: { text: "NAV2 →" }, press: { page: radio_nav2 } }
+    encoders:
+      e0:
+        draw: { text: "C1 MHz" }
+        turn_cw: { command: sim/radios/stby_com1_coarse_down }
+        turn_ccw: { command: sim/radios/stby_com1_coarse_up }
+        press: { command: sim/GPS/g1000n1_com_ff }
+      e1:
+        draw: { text: "C1 kHz" }
+        turn_cw: { command: sim/radios/stby_com1_fine_down }
+        turn_ccw: { command: sim/radios/stby_com1_fine_up }
+        press: { command: sim/GPS/g1000n1_com_ff }
+
+  radio_com2:
+    keys:
+      0: { draw: { text: STBY, value: sim/cockpit2/radios/actuators/com2_standby_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg }, press: { command: sim/radios/com2_standy_flip } }
+      1: { draw: { text: "<> SWAP" }, press: { command: sim/radios/com2_standy_flip } }
+      2: { draw: { text: COM2, value: sim/cockpit2/radios/actuators/com2_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg } }
+      3: { draw: { text: AUDIO, value: laminar/sr22/annunciators/audio/com2, lit_color: cyan }, press: { command: sim/audio_panel/select_audio_com2 } }
+      7: { draw: { text: MIC2, value: laminar/sr22/annunciators/audio/mic2, lit_color: cyan }, press: { command: sim/audio_panel/transmit_audio_com2 } }
+      8: { draw: { text: "← COM1" }, press: { page: radio_com1 } }
+      9: { draw: { text: COM2 } }
+      10: { draw: { text: "NAV1 →" }, press: { page: radio_nav1 } }
+      11: { draw: { text: "NAV2 →" }, press: { page: radio_nav2 } }
+    encoders:
+      e0:
+        draw: { text: "C2 MHz" }
+        turn_cw: { command: sim/radios/stby_com2_coarse_down }
+        turn_ccw: { command: sim/radios/stby_com2_coarse_up }
+        press: { command: sim/radios/com2_standy_flip }
+      e1:
+        draw: { text: "C2 kHz" }
+        turn_cw: { command: sim/radios/stby_com2_fine_down }
+        turn_ccw: { command: sim/radios/stby_com2_fine_up }
+        press: { command: sim/radios/com2_standy_flip }
+
+  # NAV1/NAV2. Frequencies are 10s of kHz -> MHz (scale 0.01).
+  radio_nav1:
+    keys:
+      0: { draw: { text: STBY, value: sim/cockpit/radios/nav1_stdby_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg }, press: { command: sim/GPS/g1000n3_nav_ff } }
+      1: { draw: { text: "<> SWAP" }, press: { command: sim/GPS/g1000n3_nav_ff } }
+      2: { draw: { text: NAV1, value: sim/cockpit/radios/nav1_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg } }
+      3: { draw: { text: AUDIO, value: laminar/sr22/annunciators/audio/nav1, lit_color: cyan }, press: { command: sim/audio_panel/select_audio_nav1 } }
+      8: { draw: { text: "← COM1" }, press: { page: radio_com1 } }
+      9: { draw: { text: "COM2 →" }, press: { page: radio_com2 } }
+      10: { draw: { text: NAV1 } }
+      11: { draw: { text: "NAV2 →" }, press: { page: radio_nav2 } }
+    encoders:
+      e0:
+        draw: { text: "N1 MHz" }
+        turn_cw: { command: sim/radios/stby_nav1_coarse_down }
+        turn_ccw: { command: sim/radios/stby_nav1_coarse_up }
+        press: { command: sim/GPS/g1000n3_nav_ff }
+      e1:
+        draw: { text: "N1 kHz" }
+        turn_cw: { command: sim/radios/stby_nav1_fine_down }
+        turn_ccw: { command: sim/radios/stby_nav1_fine_up }
+        press: { command: sim/GPS/g1000n3_nav_ff }
+
+  radio_nav2:
+    keys:
+      0: { draw: { text: STBY, value: sim/cockpit/radios/nav2_stdby_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg }, press: { command: sim/radios/nav2_standy_flip } }
+      1: { draw: { text: "<> SWAP" }, press: { command: sim/radios/nav2_standy_flip } }
+      2: { draw: { text: NAV2, value: sim/cockpit/radios/nav2_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg } }
+      3: { draw: { text: AUDIO, value: laminar/sr22/annunciators/audio/nav2, lit_color: cyan }, press: { command: sim/audio_panel/select_audio_nav2 } }
+      8: { draw: { text: "← COM1" }, press: { page: radio_com1 } }
+      9: { draw: { text: "COM2 →" }, press: { page: radio_com2 } }
+      10: { draw: { text: "NAV1 →" }, press: { page: radio_nav1 } }
+      11: { draw: { text: NAV2 } }
+    encoders:
+      e0:
+        draw: { text: "N2 MHz" }
+        turn_cw: { command: sim/radios/stby_nav2_coarse_down }
+        turn_ccw: { command: sim/radios/stby_nav2_coarse_up }
+        press: { command: sim/radios/nav2_standy_flip }
+      e1:
+        draw: { text: "N2 kHz" }
+        turn_cw: { command: sim/radios/stby_nav2_fine_down }
+        turn_ccw: { command: sim/radios/stby_nav2_fine_up }
+        press: { command: sim/radios/nav2_standy_flip }
+
+  # Transponder. Keys 0-3 bump each squawk digit (the source splits the code into
+  # per-digit displays via floor/mod, which the subset can't do, so key 0 shows
+  # the whole code). Mode keys (ON/OFF/STBY/ALT/TEST) test transponder_mode == N,
+  # uncomputable here, so they're plain command buttons.
+  transponder:
+    keys:
+      0: { draw: { text: SQUAWK, value: sim/cockpit/radios/transponder_code, format: "{:.0}", font: seven-seg }, press: { command: sim/transponder/transponder_thousands_up } }
+      1: { draw: { text: "+100" }, press: { command: sim/transponder/transponder_hundreds_up } }
+      2: { draw: { text: "+10" }, press: { command: sim/transponder/transponder_tens_up } }
+      3: { draw: { text: "+1" }, press: { command: sim/transponder/transponder_ones_up } }
+      4: { draw: { text: ON }, press: { command: sim/transponder/transponder_on } }
+      5: { draw: { text: OFF }, press: { command: sim/transponder/transponder_off } }
+      6: { draw: { text: STBY }, press: { command: sim/transponder/transponder_standby } }
+      7: { draw: { text: ALT }, press: { command: sim/transponder/transponder_alt } }
+      8: { draw: { text: IDENT, value: sim/cockpit/radios/transponder_id, lit_color: yellow }, press: { command: sim/transponder/transponder_ident } }
+      9: { draw: { text: TEST }, press: { command: sim/transponder/transponder_test } }
+      10: { draw: { text: LIGHT, value: sim/cockpit/radios/transponder_light, lit_color: orange } }
+      11: { draw: { text: MODE, value: sim/cockpit2/radios/actuators/transponder_mode, format: "{:.0}" } }
+    encoders:
+      e0:
+        draw: { text: "12" }
+        turn_cw: { command: sim/transponder/transponder_12_up }
+        turn_ccw: { command: sim/transponder/transponder_12_down }
+      e3:
+        draw: { text: "34" }
+        turn_cw: { command: sim/transponder/transponder_34_up }
+        turn_ccw: { command: sim/transponder/transponder_34_down }
+
+  # Engine. Multi-value source keys collapse to a primary reading. FUEL EST
+  # (endurance = total fuel / flow) needs a multi-dataref formula the subset
+  # can't express, so key 8 is omitted. Fuel quantities are kg -> US gal (/2.72).
+  engine:
+    keys:
+      0: { draw: { text: "ENG RPM", value: "sim/cockpit2/engine/indicators/engine_speed_rpm[0]", format: "{:.0}" } }
+      1: { draw: { text: MAP, value: "sim/cockpit2/engine/indicators/MPR_in_hg[0]", format: "{:.1}" } }
+      2: { draw: { text: "OIL T", value: sim/cockpit2/transmissions/indicators/oil_temperature, format: "{:.0}" } }
+      3: { draw: { text: "OIL P", value: sim/cockpit2/transmissions/indicators/oil_pressure, format: "{:.0}" } }
+      4: { draw: { text: FF, value: "sim/cockpit2/engine/indicators/fuel_flow_kg_sec[0]", scale: 1188.78, format: "{:.1}" } }   # kg/s -> US gal/hr
+      5: { draw: { text: CHT, value: "sim/cockpit2/engine/indicators/CHT_deg_C[0]", format: "{:.0}" } }
+      6: { draw: { text: BATT, value: "sim/cockpit2/electrical/battery_amps[0]", format: "{:.1}" } }
+      7: { draw: { text: EGT, value: "sim/cockpit2/engine/indicators/EGT_deg_cel[0]", format: "{:.0}" } }
+      9: { draw: { text: "FUEL L", value: "sim/cockpit2/fuel/fuel_quantity[0]", scale: 0.3676, format: "{:.1}" }, press: { command: laminar/sr22/fuel_sel_left_select } }
+      10: { draw: { text: "FUEL R", value: "sim/cockpit2/fuel/fuel_quantity[1]", scale: 0.3676, format: "{:.1}" }, press: { command: laminar/sr22/fuel_sel_right_select } }
+      11: { draw: { text: "ALT1 A", value: "sim/cockpit2/electrical/generator_amps[0]", format: "{:.0}" } }
+
+  # FMS / nav data. The source mixes live numbers with string fields (waypoint
+  # ids, "HH:MM" ETA) and cross-dataref formulas (XTK). Those can't render, so
+  # WPT/ETA/XTK/DEST/DTO/SRC are label-only placeholders, as in the source.
+  fms:
+    keys:
+      0: { draw: { text: DIS, value: sim/cockpit2/radios/indicators/gps_dme_distance_nm, format: "{:.1}" } }
+      1: { draw: { text: ETE, value: sim/cockpit2/radios/indicators/gps_dme_time_min, format: "{:.0}" } }
+      2: { draw: { text: GS, value: sim/cockpit2/gauges/indicators/ground_speed_kt, format: "{:.0}" } }
+      3: { draw: { text: DTK, value: sim/cockpit2/radios/indicators/gps_bearing_deg_mag, format: "{:.0}" } }
+      4: { draw: { text: WPT } }
+      5: { draw: { text: ETA } }
+      6: { draw: { text: BRG, value: sim/cockpit2/radios/indicators/gps_bearing_deg_mag, format: "{:.0}" } }
+      7: { draw: { text: XTK } }
+      8: { draw: { text: TRK, value: sim/cockpit2/gauges/indicators/ground_track_mag_pilot, format: "{:.0}" } }
+      9: { draw: { text: DEST } }
+      10: { draw: { text: DTO } }
+      11: { draw: { text: "SRC GPS" } }
+
+  # Weather. Each source `data` widget shows one value; conversions fold into
+  # scale. Cloud keys collapse the layer's coverage/base/top to coverage %.
+  weather:
+    keys:
+      0: { draw: { text: WDIR, value: "sim/weather/region/wind_direction_degt[0]", format: "{:.0}" } }
+      1: { draw: { text: WSPD, value: "sim/weather/region/wind_speed_msc[0]", scale: 1.944, format: "{:.0}" } }   # m/s -> kts
+      2: { draw: { text: TEMP, value: "sim/weather/region/temperatures_aloft_deg_c[0]", format: "{:.0}" } }
+      3: { draw: { text: "CLD 3", value: "sim/weather/region/cloud_coverage_percent[2]", scale: 100.0, format: "{:.0}%" } }
+      4: { draw: { text: VIS, value: sim/weather/region/visibility_reported_sm, format: "{:.0}" } }
+      5: { draw: { text: DEW, value: "sim/weather/region/dewpoint_deg_c[0]", format: "{:.0}" } }
+      6: { draw: { text: TROPO, value: sim/weather/region/tropo_alt_m, scale: 3.28084, format: "{:.0}" } }   # m -> ft
+      7: { draw: { text: "CLD 2", value: "sim/weather/region/cloud_coverage_percent[1]", scale: 100.0, format: "{:.0}%" } }
+      8: { draw: { text: QNH, value: sim/weather/region/qnh_pas, scale: 0.0002953, format: "{:.2}" } }   # Pa -> inHg
+      9: { draw: { text: "QNH hPa", value: sim/weather/region/qnh_pas, scale: 0.01, format: "{:.0}" } }   # Pa -> hPa
+      10: { draw: { text: TRTMP, value: sim/weather/region/tropo_temp_c, format: "{:.0}" } }
+      11: { draw: { text: "CLD 1", value: "sim/weather/region/cloud_coverage_percent[0]", scale: 100.0, format: "{:.0}%" } }
+
+  # Views. Quick-look keys recall a view on tap and store it on long-press.
+  views:
+    keys:
+      0: { draw: { text: "LOOK 0" }, press: { command: sim/view/quick_look_0 }, long_press: { command: sim/view/quick_look_0_mem } }
+      1: { draw: { text: "LOOK 1" }, press: { command: sim/view/quick_look_1 }, long_press: { command: sim/view/quick_look_1_mem } }
+      2: { draw: { text: "LOOK 2" }, press: { command: sim/view/quick_look_2 }, long_press: { command: sim/view/quick_look_2_mem } }
+      3: { draw: { text: "LOOK 3" }, press: { command: sim/view/quick_look_3 }, long_press: { command: sim/view/quick_look_3_mem } }
+      4: { draw: { text: "LOOK 4" }, press: { command: sim/view/quick_look_4 }, long_press: { command: sim/view/quick_look_4_mem } }
+      5: { draw: { text: "LOOK 5" }, press: { command: sim/view/quick_look_5 }, long_press: { command: sim/view/quick_look_5_mem } }
+      6: { draw: { text: "LOOK 6" }, press: { command: sim/view/quick_look_6 }, long_press: { command: sim/view/quick_look_6_mem } }
+      7: { draw: { text: "LOOK 7" }, press: { command: sim/view/quick_look_7 }, long_press: { command: sim/view/quick_look_7_mem } }
+      8: { draw: { text: "3D CKPT" }, press: { command: sim/view/3d_cockpit } }
+      9: { draw: { text: CHASE }, press: { command: sim/view/chase } }
+      10: { draw: { text: FORWARD }, press: { command: sim/view/forward } }
+      11: { draw: { text: PHYSICS }, press: { command: sim/view/show_physics_model } }
+
+  # GCU 479 (G1000 control unit). Keys 0-7 are the keypad; 8-11 select the active
+  # tuning field (source lights them on gcu478_input_sel == N, uncomputable here,
+  # so no lit state). Encoders pan/range the map and drive the FMS knob.
+  gcu479:
+    keys:
+      0: { draw: { text: DIRECT }, press: { command: sim/GPS/gcu478/direct } }
+      1: { draw: { text: MENU }, press: { command: sim/GPS/gcu478/menu } }
+      2: { draw: { text: FPL }, press: { command: sim/GPS/gcu478/fpl } }
+      3: { draw: { text: PROC }, press: { command: sim/GPS/gcu478/proc } }
+      4: { draw: { text: CLR }, press: { command: sim/GPS/gcu478/clr } }
+      5: { draw: { text: ENT }, press: { command: sim/GPS/gcu478/ent } }
+      6: { draw: { text: HOME }, press: { command: sim/GPS/gcu479/home } }
+      7: { draw: { text: "<>" }, press: { command: sim/GPS/gcu478/ff } }
+      8: { draw: { text: COM }, press: { command: sim/GPS/gcu478/com } }
+      9: { draw: { text: NAV }, press: { command: sim/GPS/gcu478/nav } }
+      10: { draw: { text: CRS }, press: { command: sim/GPS/gcu479/crs }, long_press: { command: sim/autopilot/hsi_toggle_nav } }
+      11: { draw: { text: XPDR }, press: { command: sim/GPS/gcu478/xpdr } }
+    encoders:
+      e0:
+        draw: { text: RNG }
+        turn_cw: { command: sim/GPS/gcu478/range_down }
+        turn_ccw: { command: sim/GPS/gcu478/range_up }
+        press: { command: sim/GPS/gcu478/pan_push }
+      e1:
+        draw: { text: "PAN LR" }
+        turn_cw: { command: sim/GPS/gcu478/pan_right }
+        turn_ccw: { command: sim/GPS/gcu478/pan_left }
+        press: { command: sim/GPS/gcu478/pan_push }
+      e2:
+        draw: { text: "PAN UD" }
+        turn_cw: { command: sim/GPS/gcu478/pan_up }
+        turn_ccw: { command: sim/GPS/gcu478/pan_down }
+        press: { command: sim/GPS/gcu478/pan_push }
+      e3:
+        draw: { text: "FMS OUT" }
+        turn_cw: { command: sim/GPS/g1000n3_fms_outer_up }
+        turn_ccw: { command: sim/GPS/g1000n3_fms_outer_down }
+        press: { command: sim/GPS/gcu479/cursor }
+      e4:
+        draw: { text: "FMS IN" }
+        turn_cw: { command: sim/GPS/g1000n3_fms_inner_up }
+        turn_ccw: { command: sim/GPS/g1000n3_fms_inner_down }
+        press: { command: sim/GPS/gcu479/cursor }
