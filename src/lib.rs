@@ -4,5 +4,7 @@
 pub mod app;
 pub mod config;
 pub mod device;
+pub mod mirror;
 pub mod render;
 pub mod sim;
+pub mod tui;

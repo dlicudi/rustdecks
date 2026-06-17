@@ -33,6 +33,9 @@ fn main() -> ExitCode {
     if arg == "check" {
         return check(std::env::args().nth(2));
     }
+    if arg == "tui" {
+        return tui(std::env::args().nth(2));
+    }
     let path = arg;
 
     let yaml = match std::fs::read_to_string(&path) {
@@ -51,6 +54,35 @@ fn main() -> ExitCode {
         }
     };
     match app::run(profile) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Launch the terminal dashboard (monitor + virtual deck).
+fn tui(path: Option<String>) -> ExitCode {
+    let Some(path) = path else {
+        eprintln!("usage: rustdecks tui <profile.yaml>");
+        return ExitCode::FAILURE;
+    };
+    let yaml = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cannot read {path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let profile = match Profile::parse(&yaml) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match rustdecks::tui::run(profile) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
