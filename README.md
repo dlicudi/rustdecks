@@ -133,8 +133,21 @@ to stay lean; they can be added when a real profile needs them.
 
 ## Credits & license
 
-Code is MIT (see [LICENSE](LICENSE)). The Loupedeck protocol was ported from
-[python-loupedeck-live](https://github.com/dlicudi/python-loupedeck-live). The
-bundled [B612](https://github.com/polarsys/b612) font (designed for cockpit
-displays) is under the SIL Open Font License — see
-[assets/fonts/OFL.txt](assets/fonts/OFL.txt).
+rustdecks stands entirely on the work of **Pierre M. ([devleaks](https://github.com/devleaks))**:
+
+- [**python-loupedeck-live**](https://github.com/devleaks/python-loupedeck-live) —
+  the reverse-engineered Loupedeck Live serial protocol that rustdecks' device
+  layer is a Rust port of. Without it there'd be nothing to talk to the hardware.
+- [**cockpitdecks**](https://github.com/devleaks/cockpitdecks) — the X-Plane
+  controller that defined this whole idea: the page/encoder/LED model, the dataref
+  and command vocabulary, the icon and font choices, and the SR22 profile rustdecks
+  ships ([`examples/cirrus-sr22.yaml`](examples/cirrus-sr22.yaml)) is ported from its
+  config. rustdecks is a deliberately lean reimplementation of a slice of cockpitdecks;
+  for the full-featured, multi-deck, web-capable original, use cockpitdecks.
+
+Code is MIT (see [LICENSE](LICENSE)). Bundled fonts, each under the SIL Open Font
+License with its license alongside in [assets/fonts/](assets/fonts/):
+
+- [B612](https://github.com/polarsys/b612) — labels/values, designed for cockpit displays.
+- [Segment7](https://fontlibrary.org/en/font/segment7) by Cedric Knight — the 7-segment avionics readout face.
+- [Font Awesome 6 Free (Solid)](https://fontawesome.com/) — nav/menu icon glyphs.
