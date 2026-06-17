@@ -8,7 +8,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::config::{Action, Device, Draw, Encoder, Led, Profile};
 use crate::device::{Event, LoupedeckLive};
@@ -139,6 +139,13 @@ fn run_inner(
         events: VecDeque::new(),
         device_status,
         sim_status,
+        updates: 0,
+        total_updates: 0,
+        rate: 0.0,
+        redraws: 0,
+        total_redraws: 0,
+        redraw_rate: 0.0,
+        window: Instant::now(),
     };
 
     let home = app.profile.home.clone();
@@ -156,6 +163,7 @@ fn run_inner(
             Some(page) => app.load_page(&page),
             None => app.redraw_changed(),
         }
+        app.update_rate();
         app.publish();
     }
     Ok(())
@@ -207,6 +215,14 @@ struct App {
     events: VecDeque<String>,
     device_status: String,
     sim_status: String,
+    /// Throughput metering for the TUI: dataref updates in, redraws pushed out.
+    updates: u64,
+    total_updates: u64,
+    rate: f64,
+    redraws: u64,
+    total_redraws: u64,
+    redraw_rate: f64,
+    window: Instant,
 }
 
 impl App {
@@ -215,6 +231,8 @@ impl App {
             AppEvent::Input(e) => self.handle_input(e),
             AppEvent::Data(u) => {
                 self.values.insert(u.id, u.value);
+                self.updates += 1;
+                self.total_updates += 1;
             }
         }
     }
@@ -430,10 +448,16 @@ impl App {
     }
 
     // Device draws are no-ops (returning success) when running without hardware.
+    // Both count toward the redraw meter: they're only reached after the `last`
+    // change-tracking cache misses, so they equal the work actually pushed.
     fn dev_draw_key(&mut self, index: u8, buf: &[u8]) -> bool {
+        self.redraws += 1;
+        self.total_redraws += 1;
         self.device.as_mut().map_or(true, |d| d.draw_key(index, buf).is_ok())
     }
     fn dev_draw_strip(&mut self, left: bool, buf: &[u8]) -> bool {
+        self.redraws += 1;
+        self.total_redraws += 1;
         self.device.as_mut().map_or(true, |d| {
             if left { d.draw_left(buf) } else { d.draw_right(buf) }.is_ok()
         })
@@ -519,6 +543,20 @@ impl App {
         self.events.push_back(line);
     }
 
+    /// Recompute the dataref-update rate once per window has elapsed. The loop
+    /// only wakes on events, so the rate naturally reflects active traffic.
+    fn update_rate(&mut self) {
+        let elapsed = self.window.elapsed();
+        if elapsed >= Duration::from_millis(500) {
+            let secs = elapsed.as_secs_f64();
+            self.rate = self.updates as f64 / secs;
+            self.redraw_rate = self.redraws as f64 / secs;
+            self.updates = 0;
+            self.redraws = 0;
+            self.window = Instant::now();
+        }
+    }
+
     /// Publish the current visual state to the TUI mirror, if attached.
     fn publish(&self) {
         let Some(mirror) = &self.mirror else { return };
@@ -528,6 +566,10 @@ impl App {
             page: self.current_page.clone(),
             datarefs: self.dataref_views(),
             events: self.events.iter().cloned().collect(),
+            rate: self.rate,
+            total_updates: self.total_updates,
+            redraw_rate: self.redraw_rate,
+            total_redraws: self.total_redraws,
             ..Default::default()
         };
         for i in 0..12u8 {

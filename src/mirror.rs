@@ -19,6 +19,12 @@ pub struct DeckState {
     pub datarefs: Vec<(String, String)>,
     /// Most-recent input events, newest last.
     pub events: Vec<String>,
+    /// Dataref-update throughput: current rate (updates/sec) and lifetime total.
+    pub rate: f64,
+    pub total_updates: u64,
+    /// Redraws actually pushed (after change-tracking): rate and lifetime total.
+    pub redraw_rate: f64,
+    pub total_redraws: u64,
 }
 
 #[derive(Debug, Clone, Default)]

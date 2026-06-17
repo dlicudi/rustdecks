@@ -110,6 +110,16 @@ fn render_header(f: &mut Frame, area: Rect, s: &DeckState) {
         Span::styled(s.device.clone(), ok_bad(&s.device)),
         Span::raw("   sim: "),
         Span::styled(s.sim.clone(), ok_bad(&s.sim)),
+        Span::raw("   data: "),
+        Span::styled(
+            format!("{:.0}/s", s.rate),
+            Style::default().fg(Color::Yellow),
+        ),
+        Span::raw("   redraw: "),
+        Span::styled(
+            format!("{:.0}/s", s.redraw_rate),
+            Style::default().fg(Color::Magenta),
+        ),
     ]);
     f.render_widget(Paragraph::new(line), area);
 }
