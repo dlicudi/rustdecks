@@ -20,9 +20,10 @@ Run `rustdecks check <profile.yaml>` to validate a profile without hardware or s
 The profiles are ported from cockpitdecks. When porting or extending a profile,
 consult these (local clones):
 
-- `~/GitHub/cockpitdecks` — the original Python engine. Reference for dataref/command
-  names, FontAwesome icon codepoints, and color names.
-- `~/GitHub/cockpitdecks-configs` — the source deck configs. The SR22 lives at
+- `~/GitHub/cockpitdecks` — devleaks' original Python engine. Reference for
+  dataref/command names, FontAwesome icon codepoints, and color names.
+- `~/GitHub/cockpitdecks-configs` — the author's own deck configs (dlicudi, MIT),
+  the source the profiles are ported from. The SR22 lives at
   `decks/cirrus-sr22/deckconfig/loupedecklive1/<page>.yaml`; each file maps 1:1 to a
   rustdecks page (`pfi`, `engine`, `ap`, `radio_com1`, `transponder`, `fms`, …).
 

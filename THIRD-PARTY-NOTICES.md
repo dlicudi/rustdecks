@@ -49,18 +49,9 @@ Copyright (c) 2019-2024 Pierre Mareschal
 
 (Full MIT permission text as above.)
 
-## cockpitdecks-configs
-
-The SR22 profile (`examples/cirrus-sr22.yaml`) is ported from the Cirrus SR22
-configuration in <https://github.com/devleaks/cockpitdecks-configs>.
-
-```
-MIT License
-
-Copyright (c) 2024 cockpitdecks-configs
-```
-
-(Full MIT permission text as above.)
+The SR22 profile (`examples/cirrus-sr22.yaml`) is ported from the author's own
+cockpitdecks deck config at <https://github.com/dlicudi/cockpitdecks-configs>,
+so it carries no third-party notice.
 
 ---
 

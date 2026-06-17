@@ -144,10 +144,13 @@ rustdecks stands entirely on the work of **Pierre M. ([devleaks](https://github.
   layer is a Rust port of. Without it there'd be nothing to talk to the hardware.
 - [**cockpitdecks**](https://github.com/devleaks/cockpitdecks) — the X-Plane
   controller that defined this whole idea: the page/encoder/LED model, the dataref
-  and command vocabulary, the icon and font choices, and the SR22 profile rustdecks
-  ships ([`examples/cirrus-sr22.yaml`](examples/cirrus-sr22.yaml)) is ported from its
-  config. rustdecks is a deliberately lean reimplementation of a slice of cockpitdecks;
-  for the full-featured, multi-deck, web-capable original, use cockpitdecks.
+  and command vocabulary, and the icon/font choices. rustdecks is a deliberately
+  lean reimplementation of a slice of cockpitdecks; for the full-featured,
+  multi-deck, web-capable original, use cockpitdecks.
+
+The shipped SR22 profile ([`examples/cirrus-sr22.yaml`](examples/cirrus-sr22.yaml))
+is ported from my own cockpitdecks deck config at
+[dlicudi/cockpitdecks-configs](https://github.com/dlicudi/cockpitdecks-configs).
 
 Code is MIT (see [LICENSE](LICENSE)); upstream MIT copyright notices for the
 ported protocol and SR22 profile are preserved in
