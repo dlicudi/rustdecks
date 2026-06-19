@@ -1,0 +1,331 @@
+# Cessna 172 SP (Laminar, G1000) — Loupedeck Live profile.
+# Faithful port of the cockpitdecks cessna-172-sp `loupedecklive1` deck
+# (~/GitHub/cockpitdecks-configs/decks/cessna-172-sp), within the rustdecks subset.
+#
+# Subset notes (see CLAUDE.md): rustdecks shows ONE value per key and supports
+# only command / page / set-dataref actions. So the source's multi-value keys
+# collapse to a primary reading; warning/state lamps become annunciators
+# (lit_color + a 0/1 dataref, lit at value >= 0.5); `== N` state formulas and
+# string/computed datarefs can't be expressed and fall back to plain labels;
+# and `sweep` switches bind their "on" command only. Such compromises are
+# flagged inline on each page.
+#
+# Navigation is the 8 round hardware buttons (b0..b7), inherited by every page:
+#   b0 home  b1 PFI  b2 switches  b3 FCU  b4 radio  b5 engine  b6 WX  b7 XPDR
+# The `index` page mirrors the menu as icon keys. The source index also listed
+# switches2 / audiopanel / views pages, which have no source file and are dropped.
+
+device: loupedeck-live
+brightness: 0.7
+sim:
+  host: auto
+  port: 8086
+
+home: pfi
+
+# --- inherited by every page (the FCU encoder set, from encoders/encoders_fcu) ---
+# QNH reads the C172's in-Hg baro dataref (the SR22 used a different one). g1000 and
+# radio override this set with their own encoders.
+
+encoders:
+  e0:
+    draw: { text: THR, value: "sim/flightmodel/engine/ENGN_thro[0]", scale: 100.0, format: "{:.0}%" }
+    turn_cw: { command: sim/engines/throttle_up }
+    turn_ccw: { command: sim/engines/throttle_down }
+    press: { command: sim/engines/throttle_full }
+  e1:
+    draw: { text: HDG, value: sim/cockpit/autopilot/heading_mag, format: "{:.0}" }
+    turn_cw: { command: sim/autopilot/heading_up }
+    turn_ccw: { command: sim/autopilot/heading_down }
+    press: { command: sim/autopilot/heading_sync }
+  e2:
+    draw: { text: QNH, value: sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot, format: "{:.2}" }
+    turn_cw: { command: sim/instruments/barometer_up }
+    turn_ccw: { command: sim/instruments/barometer_down }
+    press: { command: sim/instruments/barometer_std }
+  e3:
+    draw: { text: ALT, value: sim/cockpit2/autopilot/altitude_dial_ft, format: "{:.0}" }
+    turn_cw: { command: sim/autopilot/altitude_up }
+    turn_ccw: { command: sim/autopilot/altitude_down }
+    press: { command: sim/autopilot/altitude_sync }
+  e4:
+    draw: { text: VS, value: sim/cockpit/autopilot/vertical_velocity, format: "{:.0}" }
+    turn_cw: { command: sim/autopilot/vertical_speed_up }
+    turn_ccw: { command: sim/autopilot/vertical_speed_down }
+    press: { command: sim/autopilot/vertical_speed_sync }
+  e5:
+    draw: { text: MIX, value: "sim/flightmodel/engine/ENGN_mixt[0]", scale: 100.0, format: "{:.0}%" }
+    turn_cw: { command: sim/engines/mixture_up }
+    turn_ccw: { command: sim/engines/mixture_down }
+    press: { command: sim/engines/mixture_max }
+
+# Nav LEDs (from pager): colors and targets match the source pager.
+leds:
+  b0: { color: orange, press: { page: index } }
+  b1: { color: green, press: { page: pfi } }
+  b2: { color: blue, press: { page: switches } }
+  b3: { color: red, press: { page: fcu } }
+  b4: { color: yellow, press: { page: radio } }
+  b5: { color: green, press: { page: engine } }
+  b6: { color: red, press: { page: weather } }
+  b7: { color: orange, press: { page: transponder } }
+
+pages:
+  # Home: an icon menu mirroring the cockpitdecks index page (minus the three
+  # source pages with no config). Each icon's accent bar colour-matches the round
+  # nav button (b0..b7) that opens the same page where one exists.
+  index:
+    keys:
+      0: { draw: { icon: pfi, text: PFI, accent: green },           press: { page: pfi } }
+      1: { draw: { icon: switches, text: SW, accent: blue },         press: { page: switches } }
+      2: { draw: { icon: autopilot, text: FCU, accent: red },        press: { page: fcu } }
+      3: { draw: { icon: gcu, text: G1000, accent: gray },           press: { page: g1000 } }
+      4: { draw: { icon: radio, text: COM, accent: yellow },         press: { page: radio } }
+      5: { draw: { icon: engine, text: ENG, accent: green },         press: { page: engine } }
+      6: { draw: { text: PEDAL, accent: gray },                      press: { page: pedestal } }
+      7: { draw: { icon: transponder, text: XPDR, accent: orange },  press: { page: transponder } }
+      8: { draw: { icon: weather, text: WX, accent: red },           press: { page: weather } }
+
+  # Cessna 172 SP — primary flight instruments page.
+  # Faithful port of cessna-172-sp/loupedecklive1/pfi.yaml within the rustdecks
+  # subset (one value per key, annunciators lit at >= 0.5). Compromises:
+  #   - key 4 FUEL: litres -> US gal folds into scale (0.264172); shows L tank only.
+  #   - key 5 WIND: source draws a head/cross-wind vector from a multi-dataref trig
+  #     formula the subset can't express, so it shows raw wind speed (kts) instead.
+  #   - key 6 FLAPS: a `sweep` switch in the source; rustdecks binds only the "on"
+  #     command (flaps_down), no toggle back up. Shows flap_ratio %.
+  #   - keys 9/10: source stacks two warning lamps per key; each keeps its primary
+  #     lamp as an annunciator (the 0/1 warning dataref lights at >= 0.5).
+  pfi:
+    keys:
+      0: { draw: { text: SPD, value: sim/cockpit2/gauges/indicators/airspeed_kts_pilot, format: "{:.0}", font: seven-seg } }
+      1: { draw: { text: HDG, value: sim/cockpit2/gauges/indicators/compass_heading_deg_mag, format: "{:.0}", font: seven-seg } }
+      2: { draw: { text: ALT, value: sim/cockpit2/gauges/indicators/altitude_ft_pilot, format: "{:.0}", font: seven-seg } }
+      3: { draw: { text: VS, value: sim/cockpit2/gauges/indicators/vvi_fpm_pilot, format: "{:.0}", font: seven-seg } }
+      4: { draw: { text: "FUEL L", value: "sim/cockpit2/fuel/fuel_quantity[0]", scale: 0.264172, format: "{:.1}" } }   # L -> US gal
+      5: { draw: { text: WIND, value: sim/cockpit2/gauges/indicators/wind_speed_kts, format: "{:.0}" } }   # source draws a wind vector (multi-dataref trig); proxy: wind speed
+      6: { draw: { text: FLAPS, value: sim/cockpit2/controls/flap_ratio, scale: 100.0, format: "{:.0}%" }, press: { command: sim/flight_controls/flaps_down } }
+      7: { draw: { text: OAT, value: sim/cockpit2/temperature/outside_air_temp_degc, format: "{:.0}" } }
+      8: { draw: { text: RPM, value: "sim/cockpit2/engine/indicators/prop_speed_rpm[0]", format: "{:.0}", font: seven-seg } }
+      9:  { draw: { text: "OIL P", value: sim/cockpit/warnings/annunciators/oil_pressure, lit_color: red } }
+      10: { draw: { text: FUEL, value: sim/cockpit/warnings/annunciators/fuel_pressure, lit_color: orange } }
+      11: { draw: { text: "WPT DIS", value: sim/cockpit2/radios/indicators/gps_dme_distance_nm, format: "{:.1}" } }
+
+  # Autopilot / FCU (ported from cessna-172-sp loupedecklive1/fcu.yaml).
+  # Mode lamps light from each mode's 0/1 status dataref (annunciator: lit >= 0.5).
+  # Subset compromises:
+  #  - NAV (source lit by `gpss_status == 2`) needs equality the subset can't test,
+  #    so it stays a plain command button with no lit state.
+  #  - VS/FLC (source lit by `altitude_mode == 4/5`) likewise can't test equality;
+  #    following the SR22 precedent they use the dedicated 0/1 vvi_status / speed_status
+  #    datarefs as numeric proxies instead.
+  #  - NAVGPS (source toggles two text parts via HSI_selector == 0/2) can't render
+  #    either state, so it's a plain command button.
+  fcu:
+    keys:
+      0: { draw: { text: AP, value: sim/cockpit2/autopilot/servos_on, lit_color: green }, press: { command: sim/autopilot/servos_toggle } }
+      1: { draw: { text: FD, value: sim/cockpit2/autopilot/flight_director_mode, lit_color: cyan }, press: { command: sim/autopilot/fdir_toggle } }
+      2: { draw: { text: HDG, value: sim/cockpit2/autopilot/heading_status, lit_color: green }, press: { command: sim/autopilot/heading } }
+      3: { draw: { text: ALT, value: sim/cockpit2/autopilot/altitude_hold_status, lit_color: green }, press: { command: sim/autopilot/altitude_hold } }
+      4: { draw: { text: NAV }, press: { command: sim/autopilot/gpss } }
+      5: { draw: { text: VNAV, value: sim/cockpit2/autopilot/vnav_armed, lit_color: cyan }, press: { command: sim/autopilot/vnav } }
+      6: { draw: { text: APR, value: sim/cockpit2/autopilot/approach_status, lit_color: green }, press: { command: sim/autopilot/approach } }
+      7: { draw: { text: "REV/BC", value: sim/cockpit2/autopilot/backcourse_status, lit_color: green }, press: { command: sim/autopilot/back_course } }
+      8: { draw: { text: VS, value: sim/cockpit2/autopilot/vvi_status, lit_color: green }, press: { command: sim/autopilot/vertical_speed } }
+      9: { draw: { text: G1000 }, press: { page: g1000 } }
+      10: { draw: { text: FLC, value: sim/cockpit2/autopilot/speed_status, lit_color: cyan }, press: { command: sim/autopilot/level_change } }
+      11: { draw: { text: NAVGPS }, press: { command: sim/GPS/g430n1_cdi } }
+
+  # Switch panel. Ported from the cockpitdecks C172 `switches` page. Source multi-text
+  # and annunciator keys collapse to the subset: switch ON lamps become annunciators
+  # (the switch's 0/1 dataref + lit_color, lit at >= 0.5). Source ON colour is
+  # deepskyblue (OFF darkorange can't be shown — single colour only). Key 0 IGNITION
+  # is a 5-position magneto switch (OFF/R/L/BOTH/START) in the source; the subset
+  # shows the raw ignition_key index and long-presses to engage the starter.
+  switches:
+    keys:
+      0: { draw: { text: IGN, value: "sim/cockpit2/engine/actuators/ignition_key[0]", format: "{:.0}", font: seven-seg }, long_press: { command: sim/ignition/engage_starter_1 } }
+      1: { draw: { text: ALT, value: "sim/cockpit2/electrical/generator_on[0]", lit_color: deepskyblue }, press: { command: sim/electrical/generator_1_toggle } }
+      2: { draw: { text: BATT, value: "sim/cockpit/electrical/battery_on[0]", lit_color: deepskyblue }, press: { command: sim/electrical/battery_1_toggle } }
+      3: { draw: { text: "FUEL P", value: "sim/cockpit/engine/fuel_pump_on[0]", lit_color: deepskyblue }, press: { command: sim/fuel/fuel_pump_1_tog } }
+      4: { draw: { text: BCN, value: sim/cockpit2/switches/beacon_on, lit_color: deepskyblue }, press: { command: sim/lights/beacon_lights_toggle } }
+      5: { draw: { text: LAND, value: sim/cockpit/electrical/landing_lights_on, lit_color: deepskyblue }, press: { command: sim/lights/landing_lights_toggle } }
+      6: { draw: { text: TAXI, value: sim/cockpit/electrical/taxi_light_on, lit_color: deepskyblue }, press: { command: sim/lights/taxi_lights_toggle } }
+      7: { draw: { text: NAV, value: sim/cockpit2/switches/navigation_lights_on, lit_color: deepskyblue }, press: { command: sim/lights/nav_lights_toggle } }
+      8: { draw: { text: STRB, value: sim/cockpit2/switches/strobe_lights_on, lit_color: deepskyblue }, press: { command: sim/lights/strobe_lights_toggle } }
+      9: { draw: { text: PITOT, value: sim/cockpit/switches/pitot_heat_on, lit_color: deepskyblue }, press: { command: sim/ice/pitot_heat0_tog } }
+      10: { draw: { text: AVION1, value: sim/cockpit2/switches/avionics_power_on, lit_color: deepskyblue }, press: { command: sim/systems/avionics_toggle } }
+      11: { draw: { text: AVION2, value: sim/cockpit2/electrical/cross_tie, lit_color: deepskyblue }, press: { command: sim/electrical/cross_tie_toggle } }
+
+  # Engine page, ported from cessna-172-sp loupedecklive1/engine.yaml. Source has 8
+  # two-part annunciator keys; the subset shows ONE value per key, so each collapses
+  # to its primary reading (paired secondary dropped): k0 RPM (drops MP), k1 fuel
+  # flow (drops fuel PSI), k2 oil pressure (drops oil temp), k3 EGT (drops FF), k4
+  # vacuum (drops batt amps), k5 left fuel qty (drops right), k6 bus0 volts (drops
+  # bus1), k7 bus0 load amps (drops bus1). Single piston engine. Conversions folded
+  # into scale: FF kg/s -> US gal/hr (3600/0.8/3.78541 = 1188.78); fuel qty L -> US gal (0.264172).
+  engine:
+    keys:
+      0: { draw: { text: RPM, value: "sim/cockpit2/engine/indicators/prop_speed_rpm[0]", format: "{:.0}" } }
+      1: { draw: { text: FF, value: "sim/cockpit2/engine/indicators/fuel_flow_kg_sec[0]", scale: 1188.78, format: "{:.1}" } }   # kg/s -> US gal/hr
+      2: { draw: { text: "OIL P", value: "sim/cockpit2/engine/indicators/oil_pressure_psi[0]", format: "{:.0}" } }
+      3: { draw: { text: EGT, value: "sim/cockpit2/engine/indicators/EGT_deg_cel[0]", format: "{:.0}" } }
+      4: { draw: { text: VAC, value: sim/cockpit/misc/vacuum, format: "{:.2}" } }
+      5: { draw: { text: "FUEL L", value: "sim/cockpit2/fuel/fuel_quantity[0]", scale: 0.264172, format: "{:.1}" } }   # L -> US gal
+      6: { draw: { text: VOLTS, value: "sim/cockpit2/electrical/bus_volts[0]", format: "{:.1}" } }
+      7: { draw: { text: AMPS, value: "sim/cockpit2/electrical/bus_load_amps[0]", format: "{:.1}" } }
+
+  # Pedestal — throttle quadrant: throttle %, mixture %, parking brake, flaps.
+  # Ported from cessna-172-sp loupedecklive1/pedestal.yaml. Throttle/mixture % are
+  # the source's seven-seg readouts (scale 100). BRAKES keeps its command and shows
+  # parking_brake_ratio as a red annunciator (lit >= 0.5). FLAP RATIO is the source's
+  # model-B annunciator (its DISAGREE part tests an equality the subset can't do), so
+  # it shows the raw flap_ratio. Throttle/mixture are also tuned by the inherited FCU
+  # encoders (e0 THR, e5 MIX), the same commands as the source pedestal encoders.
+  pedestal:
+    keys:
+      0: { draw: { text: THROTTLE, value: "sim/flightmodel/engine/ENGN_thro[0]", scale: 100.0, format: "{:.0}%", font: seven-seg } }
+      2: { draw: { text: BRAKES, value: sim/cockpit2/controls/parking_brake_ratio, lit_color: red }, press: { command: sim/flight_controls/brakes_toggle_max } }
+      3: { draw: { text: "FLAPS UP" }, press: { command: sim/flight_controls/flaps_up } }
+      4: { draw: { text: MIXTURE, value: "sim/flightmodel/engine/ENGN_mixt[0]", scale: 100.0, format: "{:.0}%", font: seven-seg } }
+      7: { draw: { text: "FLAP RATIO", value: sim/cockpit2/controls/flap_ratio, format: "{:.2}" } }
+      11: { draw: { text: "FLAPS DN" }, press: { command: sim/flight_controls/flaps_down } }
+
+  # Radio (Cessna 172 SP). Faithful port of radio.yaml + encoders/encoders_radio.yaml.
+  # The source crams COM1/COM2/ADF/NAV1/NAV2 plus the transponder mode switch onto one
+  # page. Each radio key shows the ACTIVE frequency and press swaps standby<->active;
+  # the matching encoder's draw shows the STANDBY value (one value per key). COM =
+  # hz_833/1000 (scale 0.001); NAV = hz/100 (scale 0.01); ADF raw kHz. Key 11 MODE
+  # shows the raw transponder_mode index (the source's 5-position switch list can't render).
+  # Encoders: source uses `encoder-mode` knobs — e0-e4 have only a long-press flip and
+  # NO cw/ccw; e5 is the transponder knob. rustdecks encoders have only turn/press, so the
+  # flip moves to `press` and the turns bind to standard FINE tuning (ADF has no standard
+  # tuning command, so its turns are unbound). e5 turns bump the 12 digits; the 34-digit
+  # variant used the source's mode toggle and isn't reachable here.
+  radio:
+    keys:
+      0: { draw: { text: COM1, value: sim/cockpit2/radios/actuators/com1_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg }, press: { command: sim/radios/com1_standy_flip } }
+      3: { draw: { text: NAV1, value: sim/cockpit/radios/nav1_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg }, press: { command: sim/radios/nav1_standy_flip } }
+      4: { draw: { text: COM2, value: sim/cockpit2/radios/actuators/com2_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg }, press: { command: sim/radios/com2_standy_flip } }
+      7: { draw: { text: NAV2, value: sim/cockpit/radios/nav2_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg }, press: { command: sim/radios/nav2_standy_flip } }
+      8: { draw: { text: ADF, value: sim/cockpit/radios/adf1_freq_hz, format: "{:.0}", font: seven-seg }, press: { command: sim/radios/adf1_standy_flip } }
+      11: { draw: { text: MODE, value: sim/cockpit2/radios/actuators/transponder_mode, format: "{:.0}" } }
+    encoders:
+      e0:
+        draw: { text: "C1 STBY", value: sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg }
+        turn_cw: { command: sim/radios/stby_com1_fine_up }
+        turn_ccw: { command: sim/radios/stby_com1_fine_down }
+        press: { command: sim/radios/com1_standy_flip }
+      e1:
+        draw: { text: "C2 STBY", value: sim/cockpit2/radios/actuators/com2_standby_frequency_hz_833, scale: 0.001, format: "{:.3}", font: seven-seg }
+        turn_cw: { command: sim/radios/stby_com2_fine_up }
+        turn_ccw: { command: sim/radios/stby_com2_fine_down }
+        press: { command: sim/radios/com2_standy_flip }
+      # ADF: source long-press flip -> press. No standard ADF tuning command exists, so turns unbound.
+      e2:
+        draw: { text: "ADF STBY", value: sim/cockpit/radios/adf1_stdby_freq_hz, format: "{:.0}", font: seven-seg }
+        press: { command: sim/radios/adf1_standy_flip }
+      e3:
+        draw: { text: "N1 STBY", value: sim/cockpit/radios/nav1_stdby_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg }
+        turn_cw: { command: sim/radios/stby_nav1_fine_up }
+        turn_ccw: { command: sim/radios/stby_nav1_fine_down }
+        press: { command: sim/radios/nav1_standy_flip }
+      e4:
+        draw: { text: "N2 STBY", value: sim/cockpit/radios/nav2_stdby_freq_hz, scale: 0.01, format: "{:.2}", font: seven-seg }
+        turn_cw: { command: sim/radios/stby_nav2_fine_up }
+        turn_ccw: { command: sim/radios/stby_nav2_fine_down }
+        press: { command: sim/radios/nav2_standy_flip }
+      e5:
+        draw: { text: XPDR, value: sim/cockpit/radios/transponder_code, format: "{:.0}", font: seven-seg }
+        turn_cw: { command: sim/transponder/transponder_12_up }
+        turn_ccw: { command: sim/transponder/transponder_12_down }
+
+  # Transponder. Ported from cessna-172-sp loupedecklive1/transponder.yaml. The source
+  # splits the squawk into four per-digit displays via floor/mod (inexpressible); key 0
+  # shows the whole code on a seven-seg face, keys 1-3 stay digit-bump buttons. MODE
+  # lamps (ON/OFF/STBY/ALT/TEST) are lit by `transponder_mode == N` (equality), which
+  # annunciators (lit >= 0.5) can't represent, so they're plain command buttons; key 11
+  # shows the raw mode index. IDENT and LIGHT (plain 0/1 datarefs) are annunciators.
+  transponder:
+    keys:
+      0: { draw: { text: SQUAWK, value: sim/cockpit/radios/transponder_code, format: "{:.0}", font: seven-seg }, press: { command: sim/transponder/transponder_thousands_up } }
+      1: { draw: { text: "+100" }, press: { command: sim/transponder/transponder_hundreds_up } }
+      2: { draw: { text: "+10" }, press: { command: sim/transponder/transponder_tens_up } }
+      3: { draw: { text: "+1" }, press: { command: sim/transponder/transponder_ones_up } }
+      4: { draw: { text: ON }, press: { command: sim/transponder/transponder_on } }
+      5: { draw: { text: OFF }, press: { command: sim/transponder/transponder_off } }
+      6: { draw: { text: STBY }, press: { command: sim/transponder/transponder_standby } }
+      7: { draw: { text: ALT }, press: { command: sim/transponder/transponder_alt } }
+      8: { draw: { text: IDENT, value: sim/cockpit/radios/transponder_id, lit_color: yellow }, press: { command: sim/transponder/transponder_ident } }
+      9: { draw: { text: TEST }, press: { command: sim/transponder/transponder_test } }
+      10: { draw: { text: LIGHT, value: sim/cockpit/radios/transponder_light, lit_color: orange } }
+      11: { draw: { text: MODE, value: sim/cockpit2/radios/actuators/transponder_mode, format: "{:.0}" } }
+
+  # Weather (read-only). Ported 1:1 from cessna-172-sp weather.yaml. All keys are
+  # `data` widgets (no activations). Unit conversions folded into scale: wind m/s->kt
+  # *1.944; tropo m->ft *3.28084; QNH Pa->inHg *0.0002953, Pa->hPa *0.01. Cloud
+  # layers collapse coverage/base/top to coverage % (one value/key); indices preserved.
+  weather:
+    keys:
+      0: { draw: { text: WDIR, value: "sim/weather/region/wind_direction_degt[0]", format: "{:.0}" } }
+      1: { draw: { text: WSPD, value: "sim/weather/region/wind_speed_msc[0]", scale: 1.944, format: "{:.0}" } }   # m/s -> kt
+      2: { draw: { text: TEMP, value: "sim/weather/region/temperatures_aloft_deg_c[0]", format: "{:.0}" } }
+      3: { draw: { text: "CLD 3", value: "sim/weather/region/cloud_coverage_percent[2]", scale: 100.0, format: "{:.0}%" } }
+      4: { draw: { text: VIS, value: sim/weather/region/visibility_reported_sm, format: "{:.0}" } }
+      5: { draw: { text: DEW, value: "sim/weather/region/dewpoint_deg_c[0]", format: "{:.0}" } }
+      6: { draw: { text: TROPO, value: sim/weather/region/tropo_alt_m, scale: 3.28084, format: "{:.0}" } }   # m -> ft
+      7: { draw: { text: "CLD 2", value: "sim/weather/region/cloud_coverage_percent[1]", scale: 100.0, format: "{:.0}%" } }
+      8: { draw: { text: QNH, value: sim/weather/region/qnh_pas, scale: 0.0002953, format: "{:.2}" } }   # Pa -> inHg
+      9: { draw: { text: "QNH hPa", value: sim/weather/region/qnh_pas, scale: 0.01, format: "{:.0}" } }   # Pa -> hPa
+      10: { draw: { text: TRTMP, value: sim/weather/region/tropo_temp_c, format: "{:.0}" } }
+      11: { draw: { text: "CLD 1", value: "sim/weather/region/cloud_coverage_percent[0]", scale: 100.0, format: "{:.0}%" } }
+
+  # G1000 GCU keypad + map/FMS encoders, ported from cessna-172-sp loupedecklive1/
+  # g1000.yaml (+ encoders/encoders_g1000.yaml). The C172 keypad uses the g1000n3_*
+  # command namespace (unlike the SR22 gcu479's gcu478/*). Keys 8/9/11 are input-select
+  # lamps the source lights via `gcu478_input_sel == N`; an annunciator lights at
+  # >= 0.5, not on equality, so these keep no lit state. Encoders pan/range the map and
+  # drive the FMS knob; source e5 is an encoder-mode long-press, folded to the push.
+  g1000:
+    keys:
+      0: { draw: { text: DIRECT }, press: { command: sim/GPS/g1000n3_direct } }
+      1: { draw: { text: MENU }, press: { command: sim/GPS/g1000n3_menu } }
+      2: { draw: { text: FPL }, press: { command: sim/GPS/g1000n3_fpl } }
+      3: { draw: { text: PROC }, press: { command: sim/GPS/g1000n3_proc } }
+      4: { draw: { text: CLR }, press: { command: sim/GPS/g1000n3_clr } }
+      5: { draw: { text: ENT }, press: { command: sim/GPS/g1000n3_ent } }
+      6: { draw: { text: HOME }, press: { command: sim/GPS/gcu479/home } }
+      7: { draw: { text: "< COM >" }, press: { command: sim/GPS/g1000n3_com_ff } }
+      8: { draw: { text: COM }, press: { command: sim/GPS/gcu478/com } }
+      9: { draw: { text: NAV }, press: { command: sim/GPS/gcu478/nav } }
+      10: { draw: { text: CRS }, press: { command: sim/GPS/gcu479/crs }, long_press: { command: sim/autopilot/hsi_toggle_nav } }
+      11: { draw: { text: XPDR }, press: { command: sim/GPS/gcu478/xpdr } }
+    encoders:
+      e0:
+        draw: { text: RNG }
+        turn_cw: { command: sim/GPS/gcu478/range_down }
+        turn_ccw: { command: sim/GPS/gcu478/range_up }
+        press: { command: sim/GPS/gcu478/pan_push }
+      e1:
+        draw: { text: "PAN LR" }
+        turn_cw: { command: sim/GPS/gcu478/pan_right }
+        turn_ccw: { command: sim/GPS/gcu478/pan_left }
+        press: { command: sim/GPS/gcu478/pan_push }
+      e2:
+        draw: { text: "PAN UD" }
+        turn_cw: { command: sim/GPS/gcu478/pan_up }
+        turn_ccw: { command: sim/GPS/gcu478/pan_down }
+        press: { command: sim/GPS/gcu478/pan_push }
+      e3:
+        draw: { text: "FMS OUT" }
+        turn_cw: { command: sim/GPS/g1000n3_fms_outer_up }
+        turn_ccw: { command: sim/GPS/g1000n3_fms_outer_down }
+        press: { command: sim/GPS/gcu479/cursor }
+      e4:
+        draw: { text: "FMS IN" }
+        turn_cw: { command: sim/GPS/g1000n3_fms_inner_up }
+        turn_ccw: { command: sim/GPS/g1000n3_fms_inner_down }
+        press: { command: sim/GPS/gcu479/cursor }
+      e5:
+        draw: { text: COMBO }
+        press: { command: sim/GPS/gcu479/1_2_ctr }
