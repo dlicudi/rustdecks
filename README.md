@@ -31,6 +31,17 @@ cargo build --release
 The simulator host is discovered via the X-Plane UDP beacon; if no beacon is
 seen it falls back to `127.0.0.1`. Set `sim.host` in the profile to override.
 
+Cargo aliases (in `.cargo/config.toml`) wrap the common commands — `cargo --list`
+to see them all:
+
+```sh
+cargo rd examples/cessna.yaml                     # run a profile (normal mode)
+cargo tui examples/cirrus-sr22.yaml               # terminal dashboard (virtual deck)
+cargo check-profile examples/cirrus-sr22.yaml     # validate a profile, no hardware/sim
+cargo probe                                       # Loupedeck-only smoke test
+cargo simprobe [dataref]                          # X-Plane-only smoke test
+```
+
 ## Profile format
 
 A profile is one YAML file describing pages. Each page has up to 12 screen
@@ -148,9 +159,11 @@ rustdecks stands entirely on the work of **Pierre M. ([devleaks](https://github.
   lean reimplementation of a slice of cockpitdecks; for the full-featured,
   multi-deck, web-capable original, use cockpitdecks.
 
-The shipped SR22 profile ([`examples/cirrus-sr22.yaml`](examples/cirrus-sr22.yaml))
-is ported from my own cockpitdecks deck config at
+The shipped SR22 ([`examples/cirrus-sr22.yaml`](examples/cirrus-sr22.yaml)) and
+Cessna 172 SP ([`examples/cessna-172.yaml`](examples/cessna-172.yaml)) profiles are
+ported from my own cockpitdecks deck configs at
 [dlicudi/cockpitdecks-configs](https://github.com/dlicudi/cockpitdecks-configs).
+([`examples/cessna.yaml`](examples/cessna.yaml) is a minimal vocabulary demo.)
 
 Code is MIT (see [LICENSE](LICENSE)); upstream MIT copyright notices for the
 ported protocol and SR22 profile are preserved in

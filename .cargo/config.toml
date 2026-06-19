@@ -1,0 +1,16 @@
+# Convenience aliases. Run `cargo --list` to see them.
+[alias]
+# Run a profile (normal mode):       cargo rd examples/cessna.yaml
+rd = "run --release --"
+# Validate a profile (no hardware):  cargo check-profile examples/cirrus-sr22.yaml
+check-profile = "run -- check"
+# Terminal dashboard (virtual deck): cargo tui examples/cirrus-sr22.yaml
+tui = "run --release -- tui"
+# Loupedeck-only smoke test:         cargo probe
+probe = "run --release -- probe"
+# X-Plane-only smoke test:           cargo simprobe [dataref]
+simprobe = "run --release -- simprobe"
+# Render the README hero image:      cargo hero
+hero = "run --example hero"
+# Render tile previews to PNG:       cargo preview
+preview = "run --example preview"
