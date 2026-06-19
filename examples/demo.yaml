@@ -1,6 +1,7 @@
-# Example rustdecks profile — Cessna 172, Loupedeck Live.
+# Minimal rustdecks profile — a vocabulary demo, not a real aircraft deck.
 # Demonstrates the full vocabulary: keys, encoders with side-strip draw, LEDs,
-# and the three action kinds (command, page, set-dataref).
+# and the three action kinds (command, page, set-dataref). For complete worked
+# profiles see cirrus-sr22.yaml and cessna-172.yaml.
 
 device: loupedeck-live
 brightness: 0.7

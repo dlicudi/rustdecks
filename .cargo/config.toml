@@ -1,6 +1,6 @@
 # Convenience aliases. Run `cargo --list` to see them.
 [alias]
-# Run a profile (normal mode):       cargo rd examples/cessna.yaml
+# Run a profile (normal mode):       cargo rd examples/cessna-172.yaml
 rd = "run --release --"
 # Validate a profile (no hardware):  cargo check-profile examples/cirrus-sr22.yaml
 check-profile = "run -- check"
