@@ -262,8 +262,10 @@ fn decode_event(msg: &[u8]) -> Option<Event> {
     match header {
         BUTTON_PRESS => button_event(*data.first()?, *data.get(1)? == 0x00),
         KNOB_ROTATE => Some(Event::EncoderTurn {
+            // Rotation is a signed delta (+n CW, -n CCW); fast turns batch detents,
+            // so classify by sign, not an exact +1.
             index: knob_index(*data.first()?)?,
-            clockwise: *data.get(1)? == 0x01,
+            clockwise: (*data.get(1)? as i8) > 0,
         }),
         TOUCH => decode_touch(data, false),
         TOUCH_END => decode_touch(data, true),
@@ -390,6 +392,15 @@ mod tests {
         assert_eq!(
             decode_event(&[0x05, 0x01, 0x01, 0x04, 0x01]),
             Some(Event::EncoderTurn { index: 3, clockwise: true })
+        );
+        // fast turns batch detents: +2 is still CW, 0xFE (-2) is CCW
+        assert_eq!(
+            decode_event(&[0x05, 0x01, 0x01, 0x04, 0x02]),
+            Some(Event::EncoderTurn { index: 3, clockwise: true })
+        );
+        assert_eq!(
+            decode_event(&[0x05, 0x01, 0x01, 0x04, 0xFE]),
+            Some(Event::EncoderTurn { index: 3, clockwise: false })
         );
         // touch at x=150 (col 1), y=95 (row 1) -> key 5
         let touch = [0x00, 0x00, 150, 0x00, 95, 0x01];
