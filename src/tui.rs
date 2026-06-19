@@ -82,24 +82,43 @@ fn event_loop(
         push(&mut ui.redraw_hist, snap.redraw_rate as u64);
         terminal.draw(|f| render(f, &snap, &ui))?;
 
-        if !event::poll(Duration::from_millis(100))? {
-            continue;
-        }
-        match event::read()? {
-            CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
-                if matches!(key.code, KeyCode::Esc) {
+        // Drain every input queued this frame before the next redraw, so bursts
+        // of wheel/arrow events don't trickle in one-per-redraw (the "lag").
+        if event::poll(Duration::from_millis(100))? {
+            loop {
+                if process_event(event::read()?, terminal, &mut ui, inject)? {
                     return Ok(());
                 }
-                handle_key(key.code, &mut ui, inject);
+                if !event::poll(Duration::ZERO)? {
+                    break;
+                }
             }
-            CtEvent::Mouse(m) => {
-                let size = terminal.size()?;
-                let l = layout(Rect::new(0, 0, size.width, size.height));
-                handle_mouse(m.kind, m.column, m.row, &l, &mut ui, inject);
-            }
-            _ => {}
         }
     }
+}
+
+/// Handle one input event. Returns `Ok(true)` when the user asked to quit.
+fn process_event(
+    ev: CtEvent,
+    terminal: &DefaultTerminal,
+    ui: &mut Ui,
+    inject: &Sender<DeckEvent>,
+) -> std::io::Result<bool> {
+    match ev {
+        CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
+            if matches!(key.code, KeyCode::Esc) {
+                return Ok(true);
+            }
+            handle_key(key.code, ui, inject);
+        }
+        CtEvent::Mouse(m) => {
+            let size = terminal.size()?;
+            let l = layout(Rect::new(0, 0, size.width, size.height));
+            handle_mouse(m.kind, m.column, m.row, &l, ui, inject);
+        }
+        _ => {}
+    }
+    Ok(false)
 }
 
 fn push(q: &mut VecDeque<u64>, v: u64) {
@@ -147,26 +166,30 @@ fn handle_key(code: KeyCode, ui: &mut Ui, inject: &Sender<DeckEvent>) {
 }
 
 fn handle_mouse(kind: MouseEventKind, x: u16, y: u16, l: &LayoutRects, ui: &mut Ui, inject: &Sender<DeckEvent>) {
-    let enc = (0..6).find(|&i| hit(l.encoders[i], x, y));
+    let cell = (0..6).find(|&i| hit(l.encoders[i], x, y));
+    // The wheel is forgiving: anywhere in the encoders panel turns an encoder —
+    // the one under the pointer if any, else the focused one.
+    let in_panel = hit(l.enc_outer, x, y);
+    let wheel_target = cell.or(if in_panel { Some(ui.focus) } else { None });
     match kind {
         MouseEventKind::Down(MouseButton::Left) => {
             if let Some(i) = (0..12).find(|&i| hit(l.keys[i], x, y)) {
                 press_key(inject, i as u8);
             } else if let Some(i) = (0..8).find(|&i| hit(l.leds[i], x, y)) {
                 press_button(inject, i as u8);
-            } else if let Some(i) = enc {
+            } else if let Some(i) = cell.or(if in_panel { Some(ui.focus) } else { None }) {
                 ui.focus = i;
                 push_encoder(inject, i as u8);
             }
         }
         MouseEventKind::ScrollUp => {
-            if let Some(i) = enc {
+            if let Some(i) = wheel_target {
                 ui.focus = i;
                 turn_encoder(inject, i as u8, true);
             }
         }
         MouseEventKind::ScrollDown => {
-            if let Some(i) = enc {
+            if let Some(i) = wheel_target {
                 ui.focus = i;
                 turn_encoder(inject, i as u8, false);
             }
