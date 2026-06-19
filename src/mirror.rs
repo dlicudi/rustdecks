@@ -32,6 +32,10 @@ pub struct KeyView {
     pub kind: KeyKind,
     pub label: String,
     pub value: String,
+    /// Annunciator on-color (used when `kind` is `Annunciator`).
+    pub lit_rgb: [u8; 3],
+    /// Accent bar color, if the key carries one.
+    pub accent: Option<[u8; 3]>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

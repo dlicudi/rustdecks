@@ -592,17 +592,26 @@ impl App {
             return KeyView::default();
         };
         let label = draw.text.clone().unwrap_or_default();
+        let accent = draw.accent.as_deref().and_then(render::parse_color);
         if draw.icon.is_some() {
-            return KeyView { kind: KeyKind::Icon, label, value: String::new() };
+            return KeyView { kind: KeyKind::Icon, label, accent, ..Default::default() };
         }
-        if draw.lit_color.is_some() {
+        if let Some(rgb) = draw.lit_color.as_deref().and_then(render::parse_color) {
             let lit = self.value_number(draw).map(|v| v >= 0.5).unwrap_or(false);
-            return KeyView { kind: KeyKind::Annunciator { lit }, label, value: String::new() };
+            return KeyView {
+                kind: KeyKind::Annunciator { lit },
+                label,
+                lit_rgb: rgb,
+                accent,
+                ..Default::default()
+            };
         }
         KeyView {
             kind: KeyKind::Text,
             label,
             value: self.value_text(draw).unwrap_or_default(),
+            accent,
+            ..Default::default()
         }
     }
 
