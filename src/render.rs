@@ -270,6 +270,7 @@ pub fn parse_color(s: &str) -> Option<[u8; 3]> {
         "yellow" => [230, 210, 40],
         "orange" => [240, 150, 30],
         "cyan" => [40, 200, 220],
+        "deepskyblue" | "skyblue" => [0, 191, 255],
         "gray" | "grey" => [128, 128, 128],
         _ => return None,
     })
