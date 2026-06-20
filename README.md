@@ -21,7 +21,7 @@ of dependencies.
 cargo build --release
 
 # Run a profile (this is the normal mode)
-./target/release/rustdecks examples/cessna.yaml
+./target/release/rustdecks examples/cessna-172.yaml
 
 # Component smoke tests
 ./target/release/rustdecks probe                 # Loupedeck only: light LEDs, draw, print input
@@ -35,7 +35,7 @@ Cargo aliases (in `.cargo/config.toml`) wrap the common commands — `cargo --li
 to see them all:
 
 ```sh
-cargo rd examples/cessna.yaml                     # run a profile (normal mode)
+cargo rd examples/cessna-172.yaml                 # run a profile (normal mode)
 cargo tui examples/cirrus-sr22.yaml               # terminal dashboard (virtual deck)
 cargo check-profile examples/cirrus-sr22.yaml     # validate a profile, no hardware/sim
 cargo probe                                       # Loupedeck-only smoke test
@@ -163,7 +163,7 @@ The shipped SR22 ([`examples/cirrus-sr22.yaml`](examples/cirrus-sr22.yaml)) and
 Cessna 172 SP ([`examples/cessna-172.yaml`](examples/cessna-172.yaml)) profiles are
 ported from my own cockpitdecks deck configs at
 [dlicudi/cockpitdecks-configs](https://github.com/dlicudi/cockpitdecks-configs).
-([`examples/cessna.yaml`](examples/cessna.yaml) is a minimal vocabulary demo.)
+([`examples/demo.yaml`](examples/demo.yaml) is a minimal vocabulary demo.)
 
 Code is MIT (see [LICENSE](LICENSE)); upstream MIT copyright notices for the
 ported protocol and SR22 profile are preserved in

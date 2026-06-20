@@ -4,11 +4,11 @@
 //! no hardware.
 //!
 //! Input map:
-//!   screen keys 0..11  -> 1 2 3 4 / q w e r / a s d f   (or click a tile)
+//!   screen keys 0..11  -> 1 2 3 4 / 5 6 7 8 / a s d f    (or click a tile)
 //!   round buttons b0..7 -> F1..F8                        (or click an LED)
 //!   encoders e0..5     -> Up/Down focus, Left/Right turn, Enter/Space push
 //!                          (or scroll/click an encoder cell)
-//!   quit               -> Esc
+//!   quit               -> q or Esc
 
 use std::collections::VecDeque;
 use std::io::stdout;
@@ -34,7 +34,7 @@ use crate::device::Event as DeckEvent;
 use crate::mirror::{Cell, DeckState, KeyKind, KeyView, LedView, SharedDeck};
 
 /// Keyboard chars for screen keys 0..11, in deck grid order.
-const KEY_CHARS: [char; 12] = ['1', '2', '3', '4', 'q', 'w', 'e', 'r', 'a', 's', 'd', 'f'];
+const KEY_CHARS: [char; 12] = ['1', '2', '3', '4', '5', '6', '7', '8', 'a', 's', 'd', 'f'];
 /// Samples kept for the throughput sparklines.
 const HIST: usize = 120;
 
@@ -106,7 +106,7 @@ fn process_event(
 ) -> std::io::Result<bool> {
     match ev {
         CtEvent::Key(key) if key.kind == KeyEventKind::Press => {
-            if matches!(key.code, KeyCode::Esc) {
+            if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
                 return Ok(true);
             }
             handle_key(key.code, ui, inject);
@@ -300,7 +300,7 @@ fn render(f: &mut Frame, s: &DeckState, ui: &Ui) {
     render_spark(f, l.redraw_spark, "redraw/s", &ui.redraw_hist, Color::Magenta);
     f.render_widget(
         Paragraph::new(Span::styled(
-            " keys 1234/qwer/asdf · buttons F1-8 · enc \u{2191}\u{2193} focus \u{2190}\u{2192} turn \u{21b5} push · mouse click/scroll · Esc quit ",
+            " keys 1234/5678/asdf · buttons F1-8 · enc \u{2191}\u{2193} focus \u{2190}\u{2192} turn \u{21b5} push · mouse click/scroll · q quit ",
             Style::default().fg(Color::DarkGray),
         )),
         l.footer,
